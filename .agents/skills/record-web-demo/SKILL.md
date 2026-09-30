@@ -37,7 +37,18 @@ python scripts/encode.py /path/to/unique-clip /path/to/demo.mp4
 
 The encoder rejects incomplete captures, varying viewport dimensions and existing output files. It creates H.264/yuv420p MP4 with fast-start, preserves frame timestamps, and decodes the whole output to check validity. Optional `--ffmpeg` accepts an explicit executable. Install missing dependencies into a task-local environment, not the product runtime. Keep frames and binaries out of Git.
 
+## Make a readable edited demo
+
+- Keep the first recording when creating an improved version. Include repository entry, not only preloaded results. A 100 ms capture pause can improve sampling, but measure actual timestamps; 30 fps output does not mean 30 distinct browser captures per second.
+- Capture short chapters and allow 3–5 seconds for reading each result. Prepare scroll positions before each chapter. Locator actions can scroll the page automatically: inspect the resulting frames and cut repositioning rather than presenting jerky camera movement. Ground any coordinate action in a fresh screenshot.
+- For a polished edit, use Python/Pillow to crop genuine captured frames, place them on a consistent canvas, and add large captions and optional focus outlines. Do not redraw application content or fabricate a cursor. Preserve captured timing within retained intervals, and keep the edit recipe and scene timeline with the local artifacts.
+- Derive crop and annotation coordinates from the actual frames after each action. A scan button can move when Cancel appears; a stale outline may point at the wrong control. Crop complete panels and avoid partial headings from adjacent panels.
+- Label removed network wait and editorial captions/crops. Treat 1920 × 1080 as the output canvas size, not a claim about native capture resolution. Record the absence of audio/cursor and any cuts explicitly.
+- Decode and inspect every edited scene and important transition from the final MP4. Also play that exact file through the browser to its end and verify playback reports no error. State these checks precisely; a contact sheet alone is not continuous playback review.
+
 ## Cases
+
+For the user-requested automated CI demo, use the repository's separate Playwright suite in `tests/e2e` and `scripts/Run-BrowserTests.ps1`. It runs the real ASP.NET UI with fixed API fixtures in the pinned `Dockerfile.e2e` image. The normal run records every test and compares reviewed baseline PNGs; `-Mode prove` requires an intentional screenshot failure and a successful restored run. This is an automated fixture-backed browser recording, distinct from the live GitHub/Computer Use demo above. Do not add meme inserts to visual test baselines or claim the fixture validates the live scanner. See [the visual CI specification](../../../docs/specs/visual-ci.md).
 
 1. **Multiple repositories:** load Kotlin and MPS; show the source cards and total count; search `tests`; select MPS and show the smaller count; open `mps-tests`, switch Preview/Source. Show a Kotlin document as well so source attribution is visible.
 2. **Partial failure:** pair `octocat/Hello-World` with an intentionally nonexistent public repository. Show the retained empty success and separate error. Then demonstrate that all-failure or cancellation preserves an existing collection.

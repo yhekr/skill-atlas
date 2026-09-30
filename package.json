@@ -1,0 +1,14 @@
+{
+  "name": "skill-atlas-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:web": "node --test tests/web/skill-filter.test.mjs tests/web/repository-collection.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:update": "playwright test --update-snapshots=all",
+    "test:e2e:prove": "node scripts/prove-visual-diff.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

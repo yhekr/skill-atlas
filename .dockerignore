@@ -1,0 +1,16 @@
+**
+!global.json
+!Directory.Build.props
+!package.json
+!package-lock.json
+!playwright.config.mjs
+!src/
+!src/SkillAtlas.Core/**
+!src/SkillAtlas.Web/**
+!tests/
+!tests/e2e/**
+!scripts/
+!scripts/prove-visual-diff.mjs
+**/bin/
+**/obj/
+**/node_modules/
