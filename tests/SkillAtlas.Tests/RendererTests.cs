@@ -11,7 +11,14 @@ public class RendererTests
     public void SimilarityOutputTreatsMarkupAndControlCharactersAsData()
     {
         using var writer = new StringWriter();
-        var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(writer), Ansi = AnsiSupport.No });
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(writer),
+            Ansi = AnsiSupport.No,
+            // GitHub's default enricher enables styling even when AnsiSupport.No is set.
+            // Inspect repository-supplied escape sequences independently of host styling.
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
         var selected = new Skill("[red]gradle", "wrapper", "one/SKILL.md", "https://example.com/one");
         var other = new Skill("[blue]gradle", "\u001b[31mGradle", "two/SKILL.md", "https://example.com/two");
         var result = new ScanResult("owner/repo", null, [selected, other], []);
