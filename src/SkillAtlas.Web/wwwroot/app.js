@@ -1,0 +1,244 @@
+'use strict';
+
+const $ = id => document.getElementById(id);
+const state = { scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, scanVersion: 0, documentVersion: 0, view: 'preview' };
+
+function showError(message) {
+  $('scan-error').textContent = message;
+  $('scan-error').hidden = !message;
+}
+
+async function responseJson(response) {
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || 'The server could not complete this request. Please try again.');
+  if (!data) throw new Error('The server returned an unexpected response. Please try again.');
+  return data;
+}
+
+function busy(value) {
+  $('scan-button').disabled = value;
+  $('scan-button-label').textContent = value ? 'Scanning…' : 'Explore skills';
+  $('scan-button-icon').textContent = value ? '…' : '→';
+  $('cancel-button').hidden = !value;
+  $('repository').disabled = value;
+  $('reference').disabled = value;
+  document.querySelectorAll('.example').forEach(button => button.disabled = value);
+  $('scan-form').setAttribute('aria-busy', String(value));
+}
+
+function emptyReader(title, description) {
+  $('reader-empty').hidden = false;
+  $('reader-detail').hidden = true;
+  $('empty-title').textContent = title;
+  $('empty-description').textContent = description;
+  $('reader').setAttribute('aria-busy', 'false');
+}
+
+function renderSkills() {
+  const query = $('skill-filter').value.trim().toLocaleLowerCase();
+  const skills = state.scan?.skills || [];
+  const matching = skills.map((skill, index) => ({ skill, index })).filter(({ skill }) =>
+    [skill.name, skill.description, skill.path].some(text => text.toLocaleLowerCase().includes(query)));
+  $('skill-list').replaceChildren();
+  for (const { skill, index } of matching) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'skill-item' + (state.selected === index ? ' active' : '');
+    button.setAttribute('aria-pressed', String(state.selected === index));
+    button.setAttribute('aria-label', skill.name);
+    const title = document.createElement('span');
+    title.className = 'skill-title';
+    const name = document.createElement('strong');
+    name.textContent = skill.name;
+    title.append(name);
+    const description = document.createElement('p');
+    description.textContent = skill.description;
+    button.append(title, description);
+    button.addEventListener('click', () => selectSkill(index));
+    $('skill-list').append(button);
+  }
+  $('list-empty').hidden = matching.length > 0;
+  if (state.scan) {
+    $('sidebar-count').textContent = query ? `${matching.length} / ${skills.length}` : String(skills.length);
+    $('list-empty').querySelector('p').textContent = query ? 'No matching skills.' : 'No skills found.';
+    $('list-empty').querySelector('span:last-child').textContent = query ? 'Try another name or keyword.' : 'Try a different repository or branch.';
+  }
+}
+
+function setView(view) {
+  state.view = view;
+  for (const name of ['preview', 'source']) {
+    $(`${name}-tab`).classList.toggle('active', name === view);
+    $(`${name}-tab`).setAttribute('aria-selected', String(name === view));
+    $(name).hidden = name !== view || !state.document;
+  }
+}
+
+async function selectSkill(index) {
+  state.documentController?.abort();
+  const version = ++state.documentVersion;
+  const scan = state.scan;
+  if (!scan) return;
+  const skill = scan.skills[index];
+  state.selected = index;
+  state.document = null;
+  renderSkills();
+  $('reader-empty').hidden = true;
+  $('reader-detail').hidden = false;
+  $('reader').setAttribute('aria-busy', 'true');
+  $('reader').scrollTop = 0;
+  $('skill-name').textContent = skill.name;
+  $('skill-description').textContent = skill.description;
+  $('skill-path').textContent = skill.path;
+  $('source-link').href = skill.url;
+  $('copy-button').disabled = true;
+  $('copy-button').textContent = 'Copy';
+  $('preview').replaceChildren();
+  $('source-text').textContent = '';
+  $('document-status').classList.remove('error');
+  $('document-status').textContent = 'Opening SKILL.md…';
+  $('document-status').hidden = false;
+  setView('preview');
+  const controller = new AbortController();
+  state.documentController = controller;
+  try {
+    const data = state.documents.get(index) || await fetch(`/api/scans/${scan.scanId}/skills/${index}`, { signal: controller.signal }).then(responseJson);
+    if (version !== state.documentVersion) return;
+    state.documents.set(index, data);
+    state.document = data;
+    // Only the server-rendered, allowlisted Markdown HTML enters this element.
+    $('preview').innerHTML = data.html;
+    $('preview').querySelectorAll('a').forEach(link => { link.target = '_blank'; link.rel = 'noopener noreferrer'; });
+    if (!$('preview').textContent.trim()) {
+      const message = document.createElement('p');
+      message.textContent = 'This skill only contains metadata. Switch to Source to read the full file.';
+      $('preview').append(message);
+    }
+    $('source-text').textContent = data.source;
+    $('document-status').hidden = true;
+    $('copy-button').disabled = false;
+    setView(state.view);
+  } catch (error) {
+    if (error.name === 'AbortError' || version !== state.documentVersion) return;
+    $('document-status').classList.add('error');
+    $('document-status').textContent = error.message;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Retry';
+    retry.addEventListener('click', () => selectSkill(index));
+    $('document-status').append(retry);
+  } finally {
+    if (version === state.documentVersion) $('reader').setAttribute('aria-busy', 'false');
+  }
+}
+
+function renderWarnings(warnings) {
+  $('warnings').replaceChildren();
+  $('warnings').hidden = warnings.length === 0;
+  if (!warnings.length) return;
+  const details = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent = `${warnings.length} scan warning${warnings.length === 1 ? '' : 's'} — some files may have been skipped`;
+  const list = document.createElement('ul');
+  warnings.forEach(warning => { const item = document.createElement('li'); item.textContent = warning; list.append(item); });
+  details.append(summary, list);
+  $('warnings').append(details);
+}
+
+async function scanRepository(event) {
+  event.preventDefault();
+  if (state.scanController) return;
+  const repository = $('repository').value.trim();
+  if (!repository) { $('repository').focus(); return; }
+  showError('');
+  const version = ++state.scanVersion;
+  const controller = new AbortController();
+  state.scanController = controller;
+  busy(true);
+  const started = Date.now();
+  $('scan-status').hidden = false;
+  $('scan-status').classList.remove('idle');
+  $('scan-status').textContent = 'Reading the repository and discovering its skills…';
+  const timer = setInterval(() => {
+    $('scan-status').textContent = `Still exploring… ${Math.floor((Date.now() - started) / 1000)}s. Large repositories can take a little longer.`;
+  }, 10000);
+  try {
+    const data = await fetch('/api/scans', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repository, reference: $('reference').value.trim() || null }), signal: controller.signal
+    }).then(responseJson);
+    if (version !== state.scanVersion) return;
+    state.documentController?.abort();
+    state.documentVersion++;
+    state.scan = data;
+    state.selected = null;
+    state.document = null;
+    state.documents.clear();
+    $('result-title').textContent = data.source;
+    $('skill-count').textContent = `${data.skills.length} skill${data.skills.length === 1 ? '' : 's'}`;
+    $('skill-count').hidden = false;
+    $('revision').textContent = data.revision ? `⑂ ${data.revision.slice(0, 7)}` : '';
+    $('revision').title = data.revision || '';
+    $('revision').hidden = !data.revision;
+    $('skill-filter').disabled = data.skills.length === 0;
+    $('skill-filter').value = '';
+    renderSkills();
+    renderWarnings(data.warnings);
+    emptyReader(data.skills.length ? 'A little context goes a long way.' : 'No skills here. Yet.',
+      data.skills.length ? 'Select a skill on the left to explore its instructions and see what it can do.' : 'No agent SKILL.md files were found in this repository. Try another repository or branch.');
+    $('scan-status').classList.add('idle');
+    $('scan-status').textContent = `Found ${data.skills.length} skill${data.skills.length === 1 ? '' : 's'} in ${data.source}.`;
+  } catch (error) {
+    if (version !== state.scanVersion) return;
+    $('scan-status').hidden = true;
+    if (error.name === 'AbortError') {
+      $('scan-status').hidden = false;
+      $('scan-status').classList.add('idle');
+      $('scan-status').textContent = 'Scan cancelled. Ready when you are.';
+    } else showError(error instanceof TypeError ? 'Could not reach the scanner. Check that the app is running, then try again.' : error.message);
+  } finally {
+    clearInterval(timer);
+    if (version === state.scanVersion) { state.scanController = null; busy(false); }
+  }
+}
+
+$('scan-form').addEventListener('submit', scanRepository);
+$('cancel-button').addEventListener('click', () => state.scanController?.abort());
+$('skill-filter').addEventListener('input', renderSkills);
+$('preview-tab').addEventListener('click', () => setView('preview'));
+$('source-tab').addEventListener('click', () => setView('source'));
+for (const tab of [$('preview-tab'), $('source-tab')]) tab.addEventListener('keydown', event => {
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault();
+    const next = state.view === 'preview' ? 'source' : 'preview';
+    setView(next);
+    $(`${next}-tab`).focus();
+  }
+});
+$('copy-button').addEventListener('click', async () => {
+  const document = state.document;
+  if (!document) return;
+  try {
+    await navigator.clipboard.writeText(document.source);
+    if (document === state.document) $('copy-button').textContent = 'Copied!';
+  } catch {
+    if (document === state.document) $('copy-button').textContent = 'Copy unavailable';
+  }
+});
+$('branch-toggle').addEventListener('click', () => {
+  const opening = $('branch-field').hidden;
+  $('branch-field').hidden = !opening;
+  $('branch-toggle').setAttribute('aria-expanded', String(opening));
+  if (opening) $('reference').focus();
+});
+$('reference').addEventListener('input', () => {
+  $('branch-toggle').querySelector('span').textContent = $('reference').value.trim() || 'Default branch';
+});
+document.querySelectorAll('.example').forEach(button => button.addEventListener('click', () => {
+  $('repository').value = button.dataset.repository;
+  $('reference').value = '';
+  $('branch-toggle').querySelector('span').textContent = 'Default branch';
+  $('branch-field').hidden = true;
+  $('branch-toggle').setAttribute('aria-expanded', 'false');
+  $('scan-form').requestSubmit();
+}));

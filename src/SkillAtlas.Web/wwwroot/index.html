@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fa">
+  <title>Skill Atlas — Explore repository skills</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Skill Atlas home"><span class="brand-mark" aria-hidden="true">✳</span><span>Skill Atlas</span></a>
+    <span class="topbar-caption">A little more context. A lot more capability.</span>
+    <a class="github-link" href="https://github.com/yhekr/skill-atlas" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <div class="eyebrow"><span class="status-dot"></span> THE REPOSITORY SKILL EXPLORER</div>
+      <h1 id="page-title">Find the skills.<br class="mobile-break"> Understand the <span>possibilities.</span></h1>
+      <p>Discover the agent skills inside a GitHub repository. Explore what they do, one file at a time.</p>
+    </section>
+
+    <section class="scan-card" aria-label="Scan a repository">
+      <form id="scan-form">
+        <div class="form-heading"><label for="repository">GitHub repository</label><span>One repository. Every skill.</span></div>
+        <div class="form-row">
+          <div class="input-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3M14 3h7v7M10 14 21 3"/></svg><input id="repository" name="repository" type="text" placeholder="https://github.com/owner/repository" autocomplete="off" spellcheck="false" maxlength="300" required aria-describedby="repository-help"></div>
+          <button id="scan-button" class="primary-button" type="submit"><span id="scan-button-label">Explore skills</span><span id="scan-button-icon" aria-hidden="true">→</span></button>
+          <button id="cancel-button" class="secondary-button" type="button" hidden>Cancel scan</button>
+        </div>
+        <div class="form-footer"><span id="repository-help">Try a repository <button type="button" class="example" data-repository="JetBrains/kotlin">JetBrains/kotlin <span aria-hidden="true">↗</span></button><button type="button" class="example" data-repository="JetBrains/MPS">JetBrains/MPS <span aria-hidden="true">↗</span></button></span><button type="button" id="branch-toggle" class="subtle-button" aria-expanded="false" aria-controls="branch-field">⑂ <span>Default branch</span><span aria-hidden="true">⌄</span></button></div>
+        <div id="branch-field" class="branch-field" hidden><label for="reference">Branch or tag</label><input id="reference" type="text" name="reference" maxlength="200" placeholder="Leave empty for the default branch" autocomplete="off" spellcheck="false"></div>
+      </form>
+      <div id="scan-status" class="scan-status" role="status" aria-live="polite" hidden></div>
+      <div id="scan-error" class="error-banner" role="alert" hidden></div>
+    </section>
+
+    <section class="workspace" aria-label="Skill explorer">
+      <div class="workspace-toolbar"><div class="workspace-title"><span class="repo-icon" aria-hidden="true">▣</span><h2 id="result-title">Your next discovery</h2><span id="skill-count" class="count-badge" hidden></span></div><div class="workspace-meta"><span id="revision" class="revision" hidden></span><span class="read-only"><span class="status-dot"></span> Read only</span></div></div>
+      <div class="explorer-layout">
+        <aside class="sidebar" aria-label="Found skills">
+          <div class="sidebar-heading"><span>SKILLS</span><span id="sidebar-count">—</span></div>
+          <div class="filter-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="skill-filter" type="search" placeholder="Filter skills…" aria-label="Filter skills" disabled autocomplete="off"></div>
+          <div id="skill-list" class="skill-list"></div>
+          <div id="list-empty" class="list-empty"><span class="empty-list-icon" aria-hidden="true">≡</span><p>Your skills will appear here.</p><span>Start with a repository above.</span></div>
+          <div class="sidebar-footer"><span aria-hidden="true">◇</span> Duplicates, taken care of.</div>
+        </aside>
+
+        <section id="reader" class="reader" aria-label="Skill reader" aria-busy="false">
+          <div id="reader-empty" class="reader-empty"><div class="document-illustration" aria-hidden="true"><div class="document-page"><span class="mini-spark">✳</span><i></i><i></i><i></i></div><span class="document-badge">↗</span></div><span class="empty-eyebrow">A MAP TO WHAT’S POSSIBLE</span><h2 id="empty-title">Good tools start with understanding.</h2><p id="empty-description">Explore a repository, then select a skill<br>to see its instructions and how it works.</p><div class="empty-tags"><span>SKILL.md</span><span>Human-readable. Agent-ready.</span></div></div>
+          <div id="reader-detail" hidden>
+            <div class="reader-toolbar"><div class="view-tabs" role="tablist" aria-label="Document view"><button id="preview-tab" role="tab" aria-selected="true" aria-controls="preview" class="view-tab active" type="button">Preview</button><button id="source-tab" role="tab" aria-selected="false" aria-controls="source" class="view-tab" type="button">Source</button></div><div class="reader-actions"><button id="copy-button" type="button" class="subtle-button" aria-label="Copy skill source">Copy</button><a id="source-link" class="source-link" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></div></div>
+            <div class="document-heading"><span class="file-label"><span aria-hidden="true">⌑</span> SKILL.md</span><h2 id="skill-name"></h2><p id="skill-description"></p><div id="skill-path" class="file-path"></div></div>
+            <div id="document-status" class="document-status" role="status" aria-live="polite" hidden></div>
+            <article id="preview" class="markdown-body" role="tabpanel" aria-labelledby="preview-tab"></article>
+            <pre id="source" class="source-code" role="tabpanel" aria-labelledby="source-tab" hidden><code id="source-text"></code></pre>
+          </div>
+        </section>
+      </div>
+      <div id="warnings" class="warnings" hidden></div>
+    </section>
+    <footer class="page-footer"><span>Built for the curious. Made for the builders.</span><span><span class="footer-dot"></span> Open source · Powered by .NET</span></footer>
+  </main>
+</body>
+</html>
