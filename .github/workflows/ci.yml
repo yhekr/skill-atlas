@@ -38,6 +38,10 @@ jobs:
       - name: Test CI watcher scripts
         shell: pwsh
         run: ./scripts/Test-CI.ps1
+      - name: Test sandbox launcher
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/test-sbx-codex.sh
       - name: Package CLI tool
         run: dotnet pack src/SkillAtlas.Cli -c Release --no-build -o artifacts/packages
       - name: Publish web application

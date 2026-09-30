@@ -102,6 +102,34 @@ JSON содержит `source`, `revision`, `skills` (`name`, `description`, `pa
 
 Коды завершения: `0` — поиск завершён, в том числе с нулём совпадений или предупреждениями; `1` — ошибка сканирования; `2` — неверные аргументы; `130` — отмена.
 
+## Codex в sandbox через JetBrains Central
+
+`sbx-codex.sh` — вариант скрипта со слайда для Codex. Запускайте его из Git-репозитория в Bash:
+
+~~~bash
+./sbx-codex.sh atlas-task
+./sbx-codex.sh atlas-task -- "Проверь проект и предложи улучшения"
+~~~
+
+Скрипт создаёт соседний worktree `../atlas-task` и ветку `atlas-task` от текущего HEAD. Существующая ветка используется без сброса, а подходящий worktree повторно открывается с сохранением изменений. Незакоммиченные изменения исходной папки не копируются. Чужая папка, другой репозиторий, detached HEAD или уже занятая ветка не перезаписываются.
+
+Нужны **Bash, Git, jq, sbx и JetBrains Central CLI**, в котором уже выполнен `central login`. Ищется `central` или `jbcentral`; путь можно задать через `CENTRAL_BIN`. Codex должен быть доступен в образе sandbox. Целевой интерфейс `sbx`: `sbx run --name NAME -e KEY=VALUE codex WORKTREE :git -- CODEX_ARGS`. `:git` обеспечивает доступ к Git-метаданным связанного worktree, а параметры после `--` передаются Codex.
+
+Central запускается через `proxy start --return-key`; `--ensure-updated` добавляется только если он есть в справке установленной версии. Порт читается из `~/.jetbrains-central/config.json`, по умолчанию **19516**. В sandbox передаётся ключ прокси, а провайдер Codex настроен на `http://host.docker.internal:PORT/wire/KEY/codex/openai/v1` и Responses API. Настройки провайдера применяются через `-c` к одному процессу Codex. Скрипт не копирует хостовые файлы авторизации, не меняет `~/.codex/config.toml` и не записывает ключ в репозиторий или свой вывод.
+
+При необходимости задайте `CENTRAL_CONFIG` (путь к конфигу), `CENTRAL_PROXY_PORT` или `CENTRAL_PROXY_HOST`. Последний должен быть доступен **из sandbox**; на Linux настройка `host.docker.internal` зависит от реализации `sbx`. После сбоя созданный worktree сохраняется для повторного запуска.
+
+Проверка без настоящего sandbox и обращений к модели:
+
+~~~bash
+bash -n sbx-codex.sh
+bash scripts/test-sbx-codex.sh
+~~~
+
+Тесты используют настоящий Git и jq, но подменяют Central и sbx. Они не подтверждают совместимость с конкретной сборкой sbx: в текущем окружении этой команды нет. Реальный Central 1.11.0 проверен отдельно: получение ключа и обработчик `/codex/openai/v1/responses` доступны на порту 19516.
+
+Источники настройки: [провайдеры Codex](https://developers.openai.com/codex/config-advanced/#custom-model-providers), [справочник конфигурации](https://developers.openai.com/codex/config-reference/), [JetBrains Central CLI](https://www.jetbrains.com/help/central-cli/quickstart.html).
+
 ## Разработка
 
 ```powershell
