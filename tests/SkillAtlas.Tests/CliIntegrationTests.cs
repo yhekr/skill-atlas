@@ -7,6 +7,24 @@ public class CliIntegrationTests
 {
     private static readonly string CliAssembly = typeof(CliOptions).Assembly.Location;
 
+    [Theory]
+    [InlineData(" WRAPPER  GRADLE ", "gradle-build")]
+    [InlineData("gradle absent", null)]
+    [InlineData("build/SKILL.md wrapper", "gradle-build")]
+    public async Task QueryMatchesAllWordsAcrossFieldsThroughActualCli(string query, string? expected)
+    {
+        using var workspace = new TestWorkspace();
+        workspace.Write("build/SKILL.md", "---\nname: gradle-build\ndescription: Update the wrapper\n---");
+        workspace.Write("docs/SKILL.md", "---\nname: gradle-docs\ndescription: Write documentation\n---");
+        var result = await workspace.RunAsync("dotnet", CliAssembly, "scan", workspace.Root, "--query", query, "--json");
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Error);
+        using var json = JsonDocument.Parse(result.Output);
+        var skills = json.RootElement.GetProperty("skills").EnumerateArray();
+        if (expected is null) Assert.Empty(skills);
+        else Assert.Equal(expected, Assert.Single(skills).GetProperty("name").GetString());
+    }
+
     [Fact]
     public async Task SimilarityJsonUsesActualScannerAndReportsSharedTerms()
     {

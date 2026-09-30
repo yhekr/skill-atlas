@@ -61,6 +61,17 @@ public sealed class WebApiTests
     }
 
     [Fact]
+    public async Task BrowserFilterModuleIsServedWithJavaScriptContentType()
+    {
+        await using var app = new TestApplication();
+        using var client = app.CreateClient();
+        var response = await client.GetAsync("/skill-filter.mjs?v=filter-1");
+        response.EnsureSuccessStatusCode();
+        Assert.Contains(response.Content.Headers.ContentType?.MediaType,
+            new[] { "text/javascript", "application/javascript" });
+    }
+
+    [Fact]
     public async Task HomePageServesRepositoryFormAndSecurityHeaders()
     {
         await using var app = new TestApplication();

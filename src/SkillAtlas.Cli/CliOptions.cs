@@ -58,7 +58,7 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
 
         Options:
           --ref <branch-or-tag>  Scan a specific branch or tag (default: default branch)
-          --query, -q <text>     Filter name, description and path (case-insensitive)
+          --query, -q <text>     Match every word in name, description or path (ignore case)
           --similar <name|path>  Find up to 5 related skills by keyword overlap (no AI)
           --json                Write structured JSON to stdout
           --no-color            Plain text output without ANSI formatting
