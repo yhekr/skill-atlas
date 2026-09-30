@@ -2,3 +2,4 @@
 *.png binary
 *.jpg binary
 *.nupkg binary
+*.woff2 binary

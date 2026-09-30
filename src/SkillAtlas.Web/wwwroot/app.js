@@ -186,7 +186,7 @@ async function scanRepository(event) {
     renderSkills();
     renderWarnings(data.warnings);
     emptyReader(data.skills.length ? 'Select a skill to read.' : 'No skills found.',
-      data.skills.length ? 'Select a skill on the left to explore its instructions and see what it can do.' : 'No agent SKILL.md files were found in this repository. Try another repository or branch.');
+      data.skills.length ? 'Select a skill from the list to explore its instructions and see what it can do.' : 'No agent SKILL.md files were found in this repository. Try another repository or branch.');
     $('scan-status').classList.add('idle');
     $('scan-status').textContent = `Found ${data.skills.length} skill${data.skills.length === 1 ? '' : 's'} in ${data.source}.`;
   } catch (error) {
