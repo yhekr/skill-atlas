@@ -8,8 +8,8 @@
   <link rel="icon" href="/favicon.svg?v=mono-1" type="image/svg+xml">
   <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/JetBrainsMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/app.css?v=filter-1">
-  <script type="module" src="/app.js?v=filter-1"></script>
+  <link rel="stylesheet" href="/app.css?v=multi-1">
+  <script type="module" src="/app.js?v=multi-1"></script>
 </head>
 <body>
   <header class="topbar">
@@ -22,34 +22,37 @@
     <section class="intro" aria-labelledby="page-title">
       <div class="intro-copy">
         <div class="eyebrow"><span></span> YOUR CODE. MORE POSSIBILITIES.</div>
-        <h1 id="page-title">One repository.<br><span>Every agent skill.</span></h1>
-        <p>Discover the skills inside your codebase.<br>Explore their instructions. See what comes next.</p>
+        <h1 id="page-title">Your repositories.<br><span>Every agent skill.</span></h1>
+        <p>Discover the skills across your codebases.<br>Explore their instructions. See what comes next.</p>
         <div class="intro-meta"><span>SKILL.md explorer</span><span>Powered by .NET</span></div>
       </div>
       <div class="hero-art" aria-hidden="true"><div class="art-shape art-orange"></div><div class="art-shape art-purple"></div><div class="art-shape art-pink"></div><div class="art-tile"><span>SKILL<br>ATLAS</span><i></i></div></div>
     </section>
 
-    <section class="scan-card" aria-label="Scan a repository">
-      <div class="scan-titlebar"><span class="step-number">01</span><span>Connect a repository</span><span class="scan-mode">GITHUB / READ ONLY</span></div>
+    <section class="scan-card" aria-label="Scan repositories">
+      <div class="scan-titlebar"><span class="step-number">01</span><span>Connect your repositories</span><span class="scan-mode">GITHUB / READ ONLY</span></div>
       <form id="scan-form">
-        <div class="form-heading"><label for="repository">GitHub repository</label><span>ENTER A URL OR OWNER/REPO</span></div>
+        <div class="form-heading"><label for="repository">GitHub repositories</label><span>ONE PER LINE · UP TO 5</span></div>
         <div class="form-row">
-          <div class="input-wrap"><span class="command-prefix" aria-hidden="true"><span>$</span> skill-atlas <span>scan</span></span><input id="repository" name="repository" type="text" placeholder="https://github.com/owner/repository" autocomplete="off" spellcheck="false" maxlength="300" required aria-describedby="repository-help"></div>
+          <div class="input-wrap"><span class="command-prefix" aria-hidden="true"><span>$</span> skill-atlas <span>scan</span></span><textarea id="repository" name="repository" rows="2" placeholder="JetBrains/kotlin&#10;JetBrains/MPS" autocomplete="off" spellcheck="false" maxlength="1600" required aria-describedby="repository-help"></textarea></div>
           <button id="scan-button" class="primary-button" type="submit"><span id="scan-button-label">Run scan</span><span id="scan-button-icon" aria-hidden="true">↵</span></button>
           <button id="cancel-button" class="secondary-button" type="button" hidden>Cancel scan</button>
         </div>
-        <div class="form-footer"><span id="repository-help"><span class="comment-label">Try it with</span><button type="button" class="example" data-repository="JetBrains/kotlin">JetBrains/kotlin <span aria-hidden="true">↗</span></button><button type="button" class="example" data-repository="JetBrains/MPS">JetBrains/MPS <span aria-hidden="true">↗</span></button></span><button type="button" id="branch-toggle" class="subtle-button" aria-expanded="false" aria-controls="branch-field">--ref <span>default</span><span aria-hidden="true">⌄</span></button></div>
-        <div id="branch-field" class="branch-field" hidden><label for="reference">Branch or tag</label><input id="reference" type="text" name="reference" maxlength="200" placeholder="Leave empty for the default branch" autocomplete="off" spellcheck="false"></div>
+        <div class="form-footer"><span id="repository-help"><span class="comment-label">Try it with</span><button type="button" class="example" data-repository="JetBrains/kotlin">JetBrains/kotlin <span aria-hidden="true">↗</span></button><button type="button" class="example" data-repository="JetBrains/MPS">JetBrains/MPS <span aria-hidden="true">↗</span></button><button type="button" class="example" data-repository="JetBrains/kotlin,JetBrains/MPS">Kotlin + MPS <span aria-hidden="true">↗</span></button></span><button type="button" id="branch-toggle" class="subtle-button" aria-expanded="false" aria-controls="branch-field">--ref <span>default</span><span aria-hidden="true">⌄</span></button></div>
+        <div id="branch-field" class="branch-field" hidden><label for="reference">Branch or tag (all repositories)</label><input id="reference" type="text" name="reference" maxlength="200" placeholder="Leave empty for the default branch" autocomplete="off" spellcheck="false"></div>
       </form>
       <div id="scan-status" class="scan-status" role="status" aria-live="polite" hidden></div>
+      <div id="scan-failures" class="error-banner" role="alert" hidden></div>
       <div id="scan-error" class="error-banner" role="alert" hidden></div>
     </section>
 
     <section class="workspace" aria-label="Skill explorer">
       <div class="workspace-toolbar"><div class="workspace-title"><span class="step-number">02</span><h2 id="result-title">Explore the skills</h2><span id="skill-count" class="count-badge" hidden></span></div><div class="workspace-meta"><span id="revision" class="revision" hidden></span><span class="read-only"><span class="status-dot"></span> Read only</span></div></div>
+      <div id="repositories" class="repositories" aria-label="Loaded repositories" hidden></div>
       <div class="explorer-layout">
         <aside class="sidebar" aria-label="Found skills">
           <div class="sidebar-heading"><span>EXPLORER / SKILLS</span><span id="sidebar-count" role="status" aria-live="polite" aria-atomic="true">—</span></div>
+          <label class="scope-label" for="repository-scope">Search in</label><select id="repository-scope" aria-label="Search in repository" disabled><option value="">All repositories</option></select>
           <div class="filter-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="skill-filter" type="search" placeholder="e.g. gradle tests" aria-label="Filter skills" aria-describedby="filter-help" aria-controls="skill-list" disabled autocomplete="off" spellcheck="false"><button id="clear-filter" type="button" aria-label="Clear filter" hidden>×</button></div>
           <p id="filter-help" class="filter-help">All words · name + description</p>
           <div id="skill-list" class="skill-list"></div>
@@ -61,10 +64,10 @@
           <div id="reader-empty" class="reader-empty"><div class="document-glyph" aria-hidden="true"><span>{</span><i></i><span>}</span></div><span class="empty-eyebrow">GET TO KNOW YOUR TOOLS</span><h2 id="empty-title">It starts with a repository.</h2><p id="empty-description">Run a scan, then select a skill<br>to read its instructions here.</p><div class="empty-tags"><span>SKILL.md</span><span>Human-readable. Agent-ready.</span></div></div>
           <div id="reader-detail" hidden>
             <div class="reader-toolbar"><div class="view-tabs" role="tablist" aria-label="Document view"><button id="preview-tab" role="tab" aria-selected="true" aria-controls="preview" class="view-tab active" type="button">Preview</button><button id="source-tab" role="tab" aria-selected="false" aria-controls="source" class="view-tab" type="button">Source</button></div><div class="reader-actions"><button id="copy-button" type="button" class="subtle-button" aria-label="Copy skill source">Copy</button><a id="source-link" class="source-link" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></div></div>
-            <div class="document-heading"><span class="file-label"><span aria-hidden="true">#</span> SKILL.md</span><h2 id="skill-name"></h2><p id="skill-description"></p><div id="skill-path" class="file-path"></div></div>
+            <div class="document-heading"><span class="file-label"><span aria-hidden="true">#</span> SKILL.md</span><div id="skill-repository" class="skill-origin"></div><h2 id="skill-name"></h2><p id="skill-description"></p><div id="skill-path" class="file-path"></div></div>
             <section id="similar-section" class="similar-section" aria-labelledby="similar-heading" aria-busy="false">
               <div class="similar-heading"><h3 id="similar-heading">Similar skills</h3><button id="similar-button" type="button">Find similar</button></div>
-              <p>Across this repository. Keyword overlap in names and descriptions, no AI.</p>
+              <p id="similar-scope">Across this repository. Keyword overlap in names and descriptions, no AI.</p>
               <div id="similar-status" class="similar-status" role="status" aria-live="polite" hidden></div>
               <div id="similar-results" class="similar-results"></div>
             </section>

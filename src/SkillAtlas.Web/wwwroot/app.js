@@ -1,9 +1,9 @@
 'use strict';
 
-import { filterSkills } from './skill-filter.mjs?v=filter-1';
+import { flattenScans, searchCollection, findSkillIndex, parseRepositories } from './repository-collection.mjs?v=multi-1';
 
 const $ = id => document.getElementById(id);
-const state = { scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, similarController: null, scanVersion: 0, documentVersion: 0, similarVersion: 0, view: 'preview' };
+const state = { scans: [], scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, similarController: null, scanVersion: 0, documentVersion: 0, similarVersion: 0, view: 'preview' };
 
 function showError(message) {
   $('scan-error').textContent = message;
@@ -39,7 +39,9 @@ function emptyReader(title, description) {
 function renderSkills() {
   const query = $('skill-filter').value.trim();
   const skills = state.scan?.skills || [];
-  const matching = filterSkills(skills, query);
+  const scope = $('repository-scope').value;
+  const matching = searchCollection(skills, query, scope);
+  const scopeCount = skills.filter(skill => !scope || skill.scanId === scope).length;
   $('clear-filter').hidden = !$('skill-filter').value;
   $('skill-list').replaceChildren();
   for (const { skill, index } of matching) {
@@ -48,12 +50,16 @@ function renderSkills() {
     button.className = 'skill-item' + (state.selected === index ? ' active' : '');
     button.dataset.index = String(index + 1).padStart(2, '0');
     button.setAttribute('aria-pressed', String(state.selected === index));
-    button.setAttribute('aria-label', skill.name);
+    button.setAttribute('aria-label', `${skill.name} — ${skill.repository}`);
     const title = document.createElement('span');
     title.className = 'skill-title';
     const name = document.createElement('strong');
     name.textContent = skill.name;
     title.append(name);
+    const origin = document.createElement('span');
+    origin.className = 'skill-origin';
+    origin.textContent = skill.repository;
+    title.append(origin);
     const description = document.createElement('p');
     description.textContent = skill.description;
     button.append(title, description);
@@ -62,7 +68,7 @@ function renderSkills() {
   }
   $('list-empty').hidden = matching.length > 0;
   if (state.scan) {
-    $('sidebar-count').textContent = query ? `${matching.length} / ${skills.length}` : String(skills.length);
+    $('sidebar-count').textContent = `${matching.length} / ${scopeCount}`;
     $('list-empty').querySelector('p').textContent = query ? 'No matching skills.' : 'No skills found.';
     $('list-empty').querySelector('span:last-child').textContent = query ? 'Try fewer words or clear the filter.' : 'Try a different repository or branch.';
   }
@@ -84,6 +90,7 @@ async function selectSkill(index) {
   const scan = state.scan;
   if (!scan) return;
   const skill = scan.skills[index];
+  if (!skill) return;
   state.selected = index;
   state.document = null;
   renderSkills();
@@ -94,6 +101,8 @@ async function selectSkill(index) {
   $('skill-name').textContent = skill.name;
   $('skill-description').textContent = skill.description;
   $('skill-path').textContent = skill.path;
+  $('skill-repository').textContent = `${skill.repository} · ${skill.revision?.slice(0, 7) || 'no commit'}`;
+  $('similar-scope').textContent = `Within ${skill.repository}. Keyword overlap in names and descriptions, no AI.`;
   $('source-link').href = skill.url;
   $('copy-button').disabled = true;
   $('copy-button').textContent = 'Copy';
@@ -106,9 +115,9 @@ async function selectSkill(index) {
   const controller = new AbortController();
   state.documentController = controller;
   try {
-    const data = state.documents.get(index) || await fetch(`/api/scans/${scan.scanId}/skills/${index}`, { signal: controller.signal }).then(responseJson);
+    const data = state.documents.get(skill.key) || await fetch(`/api/scans/${skill.scanId}/skills/${skill.skillIndex}`, { signal: controller.signal }).then(responseJson);
     if (version !== state.documentVersion) return;
-    state.documents.set(index, data);
+    state.documents.set(skill.key, data);
     state.document = data;
     // Only the server-rendered, allowlisted Markdown HTML enters this element.
     $('preview').innerHTML = data.html;
@@ -160,7 +169,8 @@ async function findSimilar() {
   $('similar-status').classList.remove('error');
   $('similar-status').textContent = 'Comparing skill names and descriptions…';
   try {
-    const url = '/api/scans/' + state.scan.scanId + '/skills/' + state.selected + '/similar';
+    const selected = state.scan.skills[state.selected];
+    const url = `/api/scans/${selected.scanId}/skills/${selected.skillIndex}/similar`;
     const data = await fetch(url, { signal: controller.signal }).then(responseJson);
     if (version !== state.similarVersion) return;
     for (const match of data.matches) {
@@ -176,7 +186,7 @@ async function findSimilar() {
       shared.className = 'similar-terms';
       shared.textContent = 'Shared: ' + match.sharedTerms.slice(0, 6).join(', ') + (match.sharedTerms.length > 6 ? '…' : '');
       button.append(name, score, shared);
-      button.addEventListener('click', () => selectSkill(match.index));
+      button.addEventListener('click', () => selectSkill(findSkillIndex(state.scan.skills, selected.scanId, match.index)));
       $('similar-results').append(button);
     }
     $('similar-status').textContent = data.matches.length
@@ -210,12 +220,80 @@ function renderWarnings(warnings) {
   $('warnings').append(details);
 }
 
+function applyScans(scans, preserveSelection = false) {
+  const selectedKey = preserveSelection ? state.scan?.skills[state.selected]?.key : null;
+  state.documentController?.abort();
+  resetSimilar();
+  state.documentVersion++;
+  state.scans = scans;
+  state.scan = scans.length ? { skills: flattenScans(scans) } : null;
+  state.selected = null;
+  state.document = null;
+  const skills = state.scan?.skills || [];
+  if (preserveSelection) {
+    const remainingKeys = new Set(skills.map(skill => skill.key));
+    for (const key of state.documents.keys()) if (!remainingKeys.has(key)) state.documents.delete(key);
+  } else state.documents.clear();
+  const oldScope = $('repository-scope').value;
+  $('repository-scope').replaceChildren(new Option('All repositories', ''));
+  $('repositories').replaceChildren();
+  for (const scan of scans) {
+    $('repository-scope').append(new Option(scan.source, scan.scanId));
+    const card = document.createElement('div');
+    card.className = 'repository-card';
+    const name = document.createElement('strong');
+    name.textContent = scan.source;
+    const detail = document.createElement('span');
+    detail.textContent = `${scan.skills.length} skills · ${scan.reference || 'default branch'} · ${scan.revision?.slice(0, 7) || 'no commit'}`;
+    detail.title = scan.revision || '';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', `Remove ${scan.source}`);
+    remove.addEventListener('click', () => applyScans(state.scans.filter(item => item.scanId !== scan.scanId), true));
+    card.append(name, detail, remove);
+    $('repositories').append(card);
+  }
+  $('repository-scope').value = preserveSelection && scans.some(scan => scan.scanId === oldScope) ? oldScope : '';
+  $('repository-scope').disabled = !scans.length;
+  $('repositories').hidden = !scans.length;
+  $('result-title').textContent = scans.length ? `${scans.length} repositor${scans.length === 1 ? 'y' : 'ies'}` : 'Explore the skills';
+  $('skill-count').textContent = `${skills.length} skills`;
+  $('skill-count').hidden = !scans.length;
+  $('revision').hidden = true;
+  $('skill-filter').disabled = !skills.length;
+  if (!preserveSelection) $('skill-filter').value = '';
+  renderSkills();
+  renderWarnings(scans.flatMap(scan => scan.warnings.map(warning => `${scan.source}: ${warning}`)));
+  emptyReader(skills.length ? 'Select a skill to read.' : 'No skills found.',
+    skills.length ? 'Search across your repositories, then choose a skill.' : 'Add repositories and run a scan to get started.');
+  const selectedIndex = skills.findIndex(skill => skill.key === selectedKey);
+  if (selectedIndex >= 0) selectSkill(selectedIndex);
+  if (!scans.length) {
+    $('sidebar-count').textContent = '0 / 0';
+    $('list-empty').querySelector('p').textContent = 'No repositories loaded.';
+    $('list-empty').querySelector('span:last-child').textContent = 'Run a scan to get started.';
+  }
+}
+
+function showFailures(failures) {
+  $('scan-failures').replaceChildren();
+  $('scan-failures').hidden = !failures.length;
+  for (const failure of failures) {
+    const item = document.createElement('p');
+    item.textContent = `${failure.source}: ${failure.error}`;
+    $('scan-failures').append(item);
+  }
+}
+
 async function scanRepository(event) {
   event.preventDefault();
   if (state.scanController) return;
-  const repository = $('repository').value.trim();
-  if (!repository) { $('repository').focus(); return; }
+  const repositories = parseRepositories($('repository').value);
+  if (!repositories.length) { $('repository').focus(); return; }
   showError('');
+  if (repositories.length > 5) { showError('Enter up to 5 repositories, one per line.'); return; }
+  showFailures([]);
   const version = ++state.scanVersion;
   const controller = new AbortController();
   state.scanController = controller;
@@ -223,44 +301,29 @@ async function scanRepository(event) {
   const started = Date.now();
   $('scan-status').hidden = false;
   $('scan-status').classList.remove('idle');
-  $('scan-status').textContent = 'Reading the repository and discovering its skills…';
+  $('scan-status').textContent = `Scanning ${repositories.length} repositor${repositories.length === 1 ? 'y' : 'ies'}…`;
   const timer = setInterval(() => {
-    $('scan-status').textContent = `Still exploring… ${Math.floor((Date.now() - started) / 1000)}s. Large repositories can take a little longer.`;
+    $('scan-status').textContent = `Still exploring… ${Math.floor((Date.now() - started) / 1000)}s. Repositories are scanned one at a time.`;
   }, 10000);
   try {
-    const data = await fetch('/api/scans', {
+    const data = await fetch('/api/scan-batches', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repository, reference: $('reference').value.trim() || null }), signal: controller.signal
+      body: JSON.stringify({ repositories, reference: $('reference').value.trim() || null }), signal: controller.signal
     }).then(responseJson);
     if (version !== state.scanVersion) return;
-    state.documentController?.abort();
-    resetSimilar();
-    state.documentVersion++;
-    state.scan = data;
-    state.selected = null;
-    state.document = null;
-    state.documents.clear();
-    $('result-title').textContent = data.source;
-    $('skill-count').textContent = `${data.skills.length} skill${data.skills.length === 1 ? '' : 's'}`;
-    $('skill-count').hidden = false;
-    $('revision').textContent = data.revision ? `⑂ ${data.revision.slice(0, 7)}` : '';
-    $('revision').title = data.revision || '';
-    $('revision').hidden = !data.revision;
-    $('skill-filter').disabled = data.skills.length === 0;
-    $('skill-filter').value = '';
-    renderSkills();
-    renderWarnings(data.warnings);
-    emptyReader(data.skills.length ? 'Select a skill to read.' : 'No skills found.',
-      data.skills.length ? 'Select a skill from the list to explore its instructions and see what it can do.' : 'No agent SKILL.md files were found in this repository. Try another repository or branch.');
+    showFailures(data.failures);
+    if (data.scans.length) applyScans(data.scans);
     $('scan-status').classList.add('idle');
-    $('scan-status').textContent = `Found ${data.skills.length} skill${data.skills.length === 1 ? '' : 's'} in ${data.source}.`;
+    $('scan-status').textContent = data.scans.length
+      ? `Found ${state.scan.skills.length} skills across ${data.scans.length} repositor${data.scans.length === 1 ? 'y' : 'ies'}.${data.failures.length ? ` ${data.failures.length} failed; see details below.` : ''}`
+      : 'No repositories could be scanned. Previous results are unchanged.';
   } catch (error) {
     if (version !== state.scanVersion) return;
     $('scan-status').hidden = true;
     if (error.name === 'AbortError') {
       $('scan-status').hidden = false;
       $('scan-status').classList.add('idle');
-      $('scan-status').textContent = 'Scan cancelled. Ready when you are.';
+      $('scan-status').textContent = 'Scan cancelled. Previous results are unchanged.';
     } else showError(error instanceof TypeError ? 'Could not reach the scanner. Check that the app is running, then try again.' : error.message);
   } finally {
     clearInterval(timer);
@@ -272,6 +335,7 @@ $('scan-form').addEventListener('submit', scanRepository);
 $('similar-button').addEventListener('click', findSimilar);
 $('cancel-button').addEventListener('click', () => state.scanController?.abort());
 $('skill-filter').addEventListener('input', renderSkills);
+$('repository-scope').addEventListener('change', renderSkills);
 function clearFilter() {
   $('skill-filter').value = '';
   renderSkills();
@@ -311,7 +375,7 @@ $('reference').addEventListener('input', () => {
   $('branch-toggle').querySelector('span').textContent = $('reference').value.trim() || 'default';
 });
 document.querySelectorAll('.example').forEach(button => button.addEventListener('click', () => {
-  $('repository').value = button.dataset.repository;
+  $('repository').value = button.dataset.repository.replaceAll(',', '\n');
   $('reference').value = '';
   $('branch-toggle').querySelector('span').textContent = 'default';
   $('branch-field').hidden = true;

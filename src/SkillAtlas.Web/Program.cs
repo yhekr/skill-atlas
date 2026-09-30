@@ -28,6 +28,47 @@ app.Use(async (context, next) =>
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+app.MapPost("/api/scan-batches", async (BatchScanRequest request, IScanCatalog catalog, HttpContext context, ILogger<Program> logger) =>
+{
+    IReadOnlyList<ScanTarget> targets;
+    try { targets = ScanBatch.Normalize(request.Repositories, request.Reference, allowLocal: false); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+    timeout.CancelAfter(TimeSpan.FromMinutes(10));
+    try
+    {
+        var results = await ScanBatch.RunAsync(targets, (target, token) =>
+            catalog.ScanAsync(GitHubRepository.Parse(target.Source), target.Reference, token), timeout.Token);
+        foreach (var failure in results.Where(item => item.Error is not null))
+            logger.LogWarning("Batch scan failed for {Repository}", failure.Source);
+        return Results.Ok(new
+        {
+            scans = results.Where(item => item.Result is not null).Select(item => new
+            {
+                scanId = item.Result!.Id,
+                item.Reference,
+                item.Result.Snapshot.Catalog.Source,
+                item.Result.Snapshot.Catalog.Revision,
+                item.Result.Snapshot.Catalog.Skills,
+                item.Result.Snapshot.Catalog.Warnings
+            }),
+            failures = results.Where(item => item.Error is not null).Select(item => new
+            {
+                item.Source,
+                error = "Could not read this repository. Check the address, branch or tag, and your Git access."
+            })
+        });
+    }
+    catch (ScanBusyException)
+    {
+        return Results.Json(new { error = "Two scans are already running. Please try again in a moment." }, statusCode: 429);
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.Json(new { error = "The scan was cancelled or timed out. Please try again." }, statusCode: 408);
+    }
+});
+
 app.MapPost("/api/scans", async (ScanRequest request, IScanCatalog catalog, HttpContext context, ILogger<Program> logger) =>
 {
     if (string.IsNullOrWhiteSpace(request.Repository) || request.Repository.Length > 300 ||
@@ -94,4 +135,5 @@ app.MapGet("/api/scans/{id:guid}/skills/{index:int}/similar", (Guid id, int inde
 app.Run();
 
 public sealed record ScanRequest(string? Repository, string? Reference);
+public sealed record BatchScanRequest(IReadOnlyList<string?>? Repositories, string? Reference);
 public partial class Program;

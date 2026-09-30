@@ -23,7 +23,6 @@ public class CliTests
     [InlineData("scan owner/repo --similar --json")]
     [InlineData("scan owner/repo --query gradle --similar gradle")]
     [InlineData("scan owner/repo --unknown")]
-    [InlineData("scan owner/repo second/repo")]
     [InlineData("unknown")]
     public void RejectsInvalidArguments(string command) =>
         Assert.Throws<ArgumentException>(() => CliOptions.Parse(command.Split(' ')));

@@ -8,6 +8,11 @@
 - [Ci.Common.ps1](../scripts/Ci.Common.ps1) получает API-авторизацию через `GH_TOKEN`/`GITHUB_TOKEN` либо Credential Manager. Не выводить результат `git credential fill`, токены или заголовки запросов.
 - В CI Spectre.Console может добавлять ANSI из-за `GITHUB_ACTIONS=true` даже с `AnsiSupport.No`. Тест renderer уже исправлен отключением автоматических enrichers. При похожей регрессии воспроизводить окружение CI, сохраняя проверку управляющих символов из данных.
 
+## Видеодемо для PR
+
+- [record-web-demo](../.agents/skills/record-web-demo/SKILL.md) записывает реальные viewport-кадры через Computer Use и кодирует MP4 с исходными временными интервалами. Метод проверен 2026-09-30 на демо нескольких репозиториев (23,1 секунды, 57 кадров). При отсутствии FFmpeg использовался `imageio-ffmpeg` в ignored каталоге инструментов; зависимости не добавлялись в продукт.
+- Это выборка кадров одного браузерного таба, без курсора и аудио. Запись не равна скриншоту; MP4 полностью декодируется и визуально проверяется после кодирования. Кадры/видео находятся в ignored `artifacts/demo`, доступ ревьюеров обеспечивается вложением PR. `node --test tests/web` работает на Windows без зависимости от shell-раскрытия `*.test.mjs`.
+
 ## Docker Sandboxes и Central
 
 - Рабочий Docker Engine не означает рабочий Docker Sandboxes: отдельные `sbx` и `sandboxd` устанавливаются независимо. На Windows официальный пакет — `Docker.sbx` через winget, каталог исполняемых файлов — `%LOCALAPPDATA%\DockerSandboxes\bin`.

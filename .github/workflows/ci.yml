@@ -41,8 +41,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test browser filtering
-        run: node --test tests/web/skill-filter.test.mjs
+      - name: Test browser filtering and repository collections
+        run: node --test tests/web
       - name: Test sandbox launcher
         if: runner.os == 'Linux'
         shell: bash
