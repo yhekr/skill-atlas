@@ -31,6 +31,38 @@ STUB
 cat > "$test_root/bin/sbx" <<'STUB'
 #!/usr/bin/env bash
 set -eu
+printf '%s\n' "$*" >> "$SBX_TEST_CALLS"
+case "$1" in
+  ls)
+    [[ "${MOCK_LIST_FAIL:-0}" == 0 ]] || exit 23
+    if [[ -n "${MOCK_LIST_JSON:-}" ]]; then printf '%s\n' "$MOCK_LIST_JSON"
+    elif [[ -f "$SBX_TEST_STATE" ]]; then cat "$SBX_TEST_STATE"
+    else printf '{"sandboxes":[]}\n'; fi
+    exit 0 ;;
+  create)
+    printf '%s\0' "$@" > "$SBX_TEST_CREATE_CAPTURE"
+    [[ "${MOCK_CREATE_EXIT:-0}" == 0 ]] || exit "$MOCK_CREATE_EXIT"
+    args=("$@")
+    jq -n --arg name "${args[2]}" --arg tree "${args[12]}" --arg common "${args[13]}" \
+      '{sandboxes:[{name:$name,agent:"codex",workspaces:[$tree,$common]}]}' > "$SBX_TEST_STATE"
+    exit 0 ;;
+  policy)
+    printf '%s\n' "$*" >> "$SBX_TEST_POLICY_CAPTURE"
+    if [[ "$2" == allow ]]; then
+      [[ "${MOCK_ALLOW_EXIT:-0}" == 0 ]] || exit "$MOCK_ALLOW_EXIT"
+      if [[ "${MOCK_STILL_DENIED:-0}" == 0 ]]; then printf '%s\n' "$6" >> "$SBX_TEST_POLICY_STATE"; fi
+      exit 0
+    fi
+    [[ "${MOCK_POLICY_CHECK_FAIL:-0}" == 0 ]] || exit "$MOCK_POLICY_CHECK_FAIL"
+    if [[ -n "${MOCK_POLICY_JSON:-}" ]]; then printf '%s\n' "$MOCK_POLICY_JSON"; exit 0; fi
+    if [[ -f "$SBX_TEST_POLICY_STATE" ]] && grep -Fxq "$6" "$SBX_TEST_POLICY_STATE"; then
+      printf '{"allowed":true}\n'; exit 0
+    fi
+    jq -n --arg kind "${MOCK_DENY_KIND:-implicit}" '{allowed:false,deny_kind:$kind}'
+    exit 1 ;;
+  run) ;;
+  *) exit 99 ;;
+esac
 printf '%s\0' "$@" > "$SBX_TEST_CAPTURE"
 if [[ -n "${SBX_TEST_NATIVE_PROBE:-}" ]]; then
   powershell.exe -NoProfile -NonInteractive -File "$SBX_TEST_NATIVE_PROBE" "$@" > "$SBX_TEST_NATIVE_CAPTURE"
@@ -53,9 +85,16 @@ new_fixture() {
   export CENTRAL_CONFIG="$fixture/central.json"
   export CENTRAL_TEST_CAPTURE="$fixture/central.calls"
   export SBX_TEST_CAPTURE="$fixture/sbx.args"
+  export SBX_TEST_CREATE_CAPTURE="$fixture/sbx-create.args"
+  export SBX_TEST_CALLS="$fixture/sbx.calls"
+  export SBX_TEST_STATE="$fixture/sbx.json"
+  export SBX_TEST_POLICY_CAPTURE="$fixture/policy.calls"
+  export SBX_TEST_POLICY_STATE="$fixture/policy.allowed"
   export MOCK_KEY='fake_proxy-key.123'
   export MOCK_CENTRAL_FAIL=0 MOCK_SBX_EXIT=0 MOCK_UPDATE_FLAG=''
   unset CENTRAL_PROXY_PORT CENTRAL_PROXY_HOST SBX_TEST_NATIVE_PROBE SBX_TEST_NATIVE_CAPTURE
+  unset MOCK_LIST_FAIL MOCK_LIST_JSON MOCK_CREATE_EXIT MOCK_ALLOW_EXIT MOCK_STILL_DENIED
+  unset MOCK_POLICY_CHECK_FAIL MOCK_POLICY_JSON MOCK_DENY_KIND
   printf '{"proxy_port":19516}\n' > "$CENTRAL_CONFIG"
 }
 run_launcher() {
@@ -77,6 +116,11 @@ has_arg() {
   while IFS= read -r -d '' arg; do
     [[ "$arg" != "$1" ]] || return 0
   done < "$SBX_TEST_CAPTURE"
+  if [[ -f "$SBX_TEST_CREATE_CAPTURE" ]]; then
+    while IFS= read -r -d '' arg; do
+      [[ "$arg" != "$1" ]] || return 0
+    done < "$SBX_TEST_CREATE_CAPTURE"
+  fi
   return 1
 }
 pass() { passed=$((passed + 1)); printf 'PASS %s\n' "$1"; }
@@ -140,24 +184,38 @@ pass 'Create worktree; preserve paths/arguments; configure Responses without lea
 
 sbx_args=()
 while IFS= read -r -d '' arg; do sbx_args+=("$arg"); done < "$SBX_TEST_CAPTURE"
-require test "${#sbx_args[@]}" -eq 30
+require test "${#sbx_args[@]}" -eq 28
 require test "${sbx_args[0]}" = run
 require test "${sbx_args[1]}" = --name
 require test "${sbx_args[2]}" = feature
 require test "${sbx_args[11]}" = codex
-require test "${sbx_args[12]}" = "$fixture/feature"
-require test "${sbx_args[13]}" = "$fixture/project/.git"
-require test "${sbx_args[14]}" = --
-require test "${sbx_args[27]}" = --model
-require test "${sbx_args[28]}" = model-from-central
-require test "${sbx_args[29]}" = 'Prompt with spaces; $(not-a-command)'
-pass 'Mount worktree and common Git directory before the sbx argument separator'
+require test "${sbx_args[12]}" = --
+require test "${sbx_args[25]}" = --model
+require test "${sbx_args[26]}" = model-from-central
+require test "${sbx_args[27]}" = 'Prompt with spaces; $(not-a-command)'
+create_args=()
+while IFS= read -r -d '' arg; do create_args+=("$arg"); done < "$SBX_TEST_CREATE_CAPTURE"
+require test "${#create_args[@]}" -eq 14
+require test "${create_args[0]}" = create
+require test "${create_args[11]}" = codex
+require test "${create_args[12]}" = "$fixture/feature"
+require test "${create_args[13]}" = "$fixture/project/.git"
+require grep -Fxq 'policy allow network --sandbox feature localhost:19516' "$SBX_TEST_POLICY_CAPTURE"
+pass 'Create with both mounts; allow only the scoped Central port; attach without workspaces'
 
 printf 'uncommitted\n' > "$fixture/feature/keep.txt"
 run_launcher feature
 require test "$status" -eq 0
 require test "$(cat "$fixture/feature/keep.txt")" = uncommitted
 pass 'Reuse the matching worktree without losing local changes'
+require test "$(grep -c '^create ' "$SBX_TEST_CALLS")" -eq 1
+require test "$(grep -c '^policy allow ' "$SBX_TEST_CALLS")" -eq 1
+export MOCK_KEY='refreshed_proxy-key'
+run_launcher feature
+require test "$status" -eq 0
+require has_arg 'OPENAI_API_KEY=refreshed_proxy-key'
+require test "$(grep -c '^create ' "$SBX_TEST_CALLS")" -eq 1
+pass 'Reuse sandbox without recreating it or duplicating policy; refresh session credentials'
 
 mkdir -p "$fixture/feature/subdir"
 status=0
@@ -259,6 +317,7 @@ export CENTRAL_PROXY_PORT=21345 CENTRAL_PROXY_HOST=192.168.65.1
 run_launcher feature
 require test "$status" -eq 0
 require has_arg 'OPENAI_BASE_URL=http://192.168.65.1:21345/wire/fake_proxy-key.123/codex/openai/v1'
+require grep -Fxq 'policy allow network --sandbox feature 192.168.65.1:21345' "$SBX_TEST_POLICY_CAPTURE"
 pass 'Allow explicit sandbox host and port overrides'
 
 new_fixture
@@ -322,13 +381,94 @@ require test "$status" -eq 17
 require has_arg 'OPENAI_API_KEY=fake_proxy-key.123'
 pass 'Accept Windows line endings and propagate the sbx exit code'
 
+new_fixture
+export MOCK_LIST_FAIL=1
+run_launcher feature
+require test "$status" -ne 0
+require test ! -e "$SBX_TEST_CREATE_CAPTURE"
+require test ! -e "$SBX_TEST_CAPTURE"
+pass 'Do not create a sandbox when listing existing sandboxes fails'
+
+new_fixture
+for bad_list in '{broken' '{}' '{"sandboxes":false}'; do
+  export MOCK_LIST_JSON="$bad_list"
+  run_launcher feature
+  require test "$status" -ne 0
+  require test ! -e "$SBX_TEST_CREATE_CAPTURE"
+done
+pass 'Reject malformed sandbox inventory instead of assuming no sandbox exists'
+
+new_fixture
+run_launcher feature
+require test "$status" -eq 0
+saved_state=$(cat "$SBX_TEST_STATE")
+for change in '.sandboxes[0].agent="claude"' '.sandboxes[0].workspaces[0]="/unrelated"' '.sandboxes[0].workspaces |= reverse' '.sandboxes[0].workspaces |= .[:1]' '.sandboxes += .sandboxes'; do
+  printf '%s' "$saved_state" | jq "$change" > "$SBX_TEST_STATE"
+  run_launcher feature
+  require test "$status" -ne 0
+done
+require test "$(grep -c '^run ' "$SBX_TEST_CALLS")" -eq 1
+require test "$(grep -c '^create ' "$SBX_TEST_CALLS")" -eq 1
+pass 'Refuse an existing sandbox with mismatched agent, mounts, or duplicate name'
+
+case "${OSTYPE:-}" in
+  msys*|cygwin*)
+    printf '%s' "$saved_state" | jq '.sandboxes[0].workspaces |= map(sub("^/(?<drive>[a-z])/"; "\(.drive):/") | gsub("/"; "\\") | ascii_upcase)' > "$SBX_TEST_STATE"
+    run_launcher feature
+    require test "$status" -eq 0
+    pass 'Match native Windows workspace paths without case or separator sensitivity'
+    ;;
+esac
+
+new_fixture
+export MOCK_CREATE_EXIT=18
+run_launcher feature
+require test "$status" -eq 18
+require test ! -e "$SBX_TEST_POLICY_CAPTURE"
+require test ! -e "$SBX_TEST_CAPTURE"
+pass 'Stop after failed sandbox creation without applying policy or launching Codex'
+
+new_fixture
+export MOCK_DENY_KIND=explicit
+run_launcher feature
+require test "$status" -ne 0
+require test ! -e "$SBX_TEST_CAPTURE"
+if grep -q '^policy allow ' "$SBX_TEST_CALLS"; then echo 'Explicit deny must not be modified.' >&2; exit 1; fi
+pass 'Respect explicit network deny rules without adding an allow rule'
+
+new_fixture
+export MOCK_ALLOW_EXIT=19
+run_launcher feature
+require test "$status" -ne 0
+require test ! -e "$SBX_TEST_CAPTURE"
+pass 'Do not start Codex if the scoped network permission cannot be added'
+
+new_fixture
+export MOCK_STILL_DENIED=1
+run_launcher feature
+require test "$status" -ne 0
+require test ! -e "$SBX_TEST_CAPTURE"
+pass 'Verify that the policy really allows Central after adding the rule'
+
+new_fixture
+export MOCK_POLICY_CHECK_FAIL=2
+run_launcher feature
+require test "$status" -ne 0
+require test ! -e "$SBX_TEST_CAPTURE"
+unset MOCK_POLICY_CHECK_FAIL
+export MOCK_POLICY_JSON='{"allowed":"false"}'
+run_launcher feature
+require test "$status" -ne 0
+require test ! -e "$SBX_TEST_CAPTURE"
+pass 'Reject policy check failures and malformed policy responses'
+
 if [[ "${SBX_TEST_DOCKER:-0}" == 1 ]]; then
   command -v docker >/dev/null || { echo 'Docker smoke test requires docker.' >&2; exit 1; }
   new_fixture
   run_launcher docker-git
   require test "$status" -eq 0
   sbx_args=()
-  while IFS= read -r -d '' arg; do sbx_args+=("$arg"); done < "$SBX_TEST_CAPTURE"
+  while IFS= read -r -d '' arg; do sbx_args+=("$arg"); done < "$SBX_TEST_CREATE_CAPTURE"
   docker_worktree=${sbx_args[12]}
   docker_common=${sbx_args[13]}
   docker_git_dir=${sbx_args[8]#GIT_DIR=}

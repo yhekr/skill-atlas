@@ -9,7 +9,7 @@ Usage: ./sbx-codex.sh <name> [-- <Codex arguments...>]
 
 Creates/reuses ../<name> and the branch <name>, then starts Codex in sbx.
 Requires Bash, Git, jq, sbx, and an authenticated central (or jbcentral).
-The sbx CLI must support: run --name NAME -e KEY=VALUE codex WORKTREE GIT_COMMON_DIR -- ARGS
+Requires sbx with create, ls --json, scoped network policies, and run --name.
 
 Optional environment:
   CENTRAL_BIN         Path to the Central executable.
@@ -108,16 +108,61 @@ fi
 validate_port "$port" || die 'Central proxy_port must be an integer from 1 to 65535.'
 base_url="http://$proxy_host:$port/wire/$key/codex/openai/v1"
 
+# Workspaces are immutable after creation: sbx rejects them on re-attach.
+# Verify an existing sandbox before sending it a fresh Central key.
+sandboxes=$(sbx ls --json) || die 'Cannot list sandboxes. Check sbx diagnose.'
+existing=$(printf '%s' "$sandboxes" | jq -ce --arg name "$name" '
+  if (.sandboxes | type) != "array" then error("Expected sandboxes array")
+  else [.sandboxes[] | select(.name == $name)] |
+    if length > 1 then error("Duplicate sandbox name") else .[0] // {} end
+  end') || die 'Cannot read the sbx sandbox list.'
+if [[ "$existing" != '{}' ]]; then
+  windows=false
+  case "${OSTYPE:-}" in msys*|cygwin*) windows=true ;; esac
+  printf '%s' "$existing" | jq -e --arg tree "$worktree" --arg common "$git_common" --argjson windows "$windows" '
+    def normalized:
+      if $windows then gsub("\\\\"; "/") | ascii_downcase |
+        sub("^(?<drive>[a-z]):/"; "/\(.drive)/")
+      else . end | rtrimstr("/");
+    .agent == "codex" and
+    (.workspaces | type == "array") and
+    ([.workspaces[] | normalized] == ([$tree, $common] | map(normalized)))
+  ' >/dev/null || die 'An existing sandbox has a different agent or workspaces. Choose another name.'
+else
+  # Mount the common .git directory alongside the worktree. Explicit Git paths
+  # let Linux Git resolve Windows worktree pointer files without rewriting them.
+  sbx create --name "$name" \
+    -e "OPENAI_API_KEY=$key" -e "OPENAI_BASE_URL=$base_url" \
+    -e "GIT_DIR=$git_dir" -e "GIT_WORK_TREE=$worktree" \
+    codex "$worktree" "$git_common"
+fi
+
+# sbx resolves host.docker.internal to the host's localhost before policy checks.
+# Keep the exception on this sandbox and this port; respect explicit deny rules.
+policy_host=$proxy_host
+if [[ "$(printf '%s' "$proxy_host" | jq -Rr ascii_downcase)" == host.docker.internal ]]; then policy_host=localhost; fi
+policy_target="$policy_host:$port"
+policy_status=0
+policy=$(sbx policy check network --sandbox "$name" "$policy_target" --json) || policy_status=$?
+[[ "$policy_status" -le 1 ]] || die 'Cannot check the Central network policy.'
+allowed=$(printf '%s' "$policy" | jq -er 'if (.allowed | type) == "boolean" then .allowed | tostring else error("Expected allowed boolean") end') ||
+  die 'Cannot read the Central network policy.'
+if [[ "$allowed" != true ]]; then
+  printf '%s' "$policy" | jq -e '.deny_kind == "implicit"' >/dev/null ||
+    die 'Central is explicitly blocked by sandbox policy. Resolve that policy before starting Codex.'
+  sbx policy allow network --sandbox "$name" "$policy_target" || die 'Cannot allow the Central proxy port.'
+  sbx policy check network --sandbox "$name" "$policy_target" --json | jq -e '.allowed == true' >/dev/null ||
+    die 'Central remains blocked by sandbox policy.'
+fi
+
 printf 'Starting Codex in %s (branch %s), via Central on %s:%s.\n' "$worktree" "$name" "$proxy_host" "$port"
 # Provider overrides apply only to this Codex process. No host auth/config is copied.
-# Mount the common .git directory as a second workspace, as in the sbx example.
-# Explicit Git paths also resolve Windows .git pointer files inside Linux.
 exec sbx run --name "$name" \
   -e "OPENAI_API_KEY=$key" \
   -e "OPENAI_BASE_URL=$base_url" \
   -e "GIT_DIR=$git_dir" \
   -e "GIT_WORK_TREE=$worktree" \
-  codex "$worktree" "$git_common" -- \
+  codex -- \
   -c 'model_provider="jetbrains_central"' \
   -c 'model_providers.jetbrains_central.name="JetBrains Central"' \
   -c "model_providers.jetbrains_central.base_url=\"$base_url\"" \
