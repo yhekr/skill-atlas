@@ -42,7 +42,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test browser filtering and repository collections
-        run: node --test tests/web
+        run: node --test tests/web/skill-filter.test.mjs tests/web/repository-collection.test.mjs
       - name: Test sandbox launcher
         if: runner.os == 'Linux'
         shell: bash

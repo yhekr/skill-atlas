@@ -185,7 +185,7 @@ SBX_TEST_DOCKER=1 bash scripts/test-sbx-codex.sh
 
 Общая [память проекта](memory/README.md) хранит решения, рабочие договорённости и проверенное состояние между чатами. Правила в [AGENTS.md](AGENTS.md) подключают её чтение и [скилл поддержки памяти](.agents/skills/maintain-project-memory/SKILL.md). Файлы версионируются вместе с кодом; каждый клон и worktree видит состояние своей ветки. Для автоматического обнаружения правил и скилла открывайте Codex в корне Skill Atlas или его подпапке.
 
-Для тестов браузерного фильтра нужен Node.js 22+. Приложение в Node.js не нуждается: `node --test tests/web/skill-filter.test.mjs` проверяет модуль без дополнительных npm-пакетов. Эти проверки запускаются в обеих задачах GitHub Actions вместе с тестами .NET.
+Для тестов браузерного фильтра и коллекции нужен Node.js 22+. Приложение в Node.js не нуждается: `node --test tests/web/skill-filter.test.mjs tests/web/repository-collection.test.mjs` проверяет оба модуля без дополнительных npm-пакетов. Эти проверки запускаются в обеих задачах GitHub Actions вместе с тестами .NET.
 
 ```powershell
 dotnet build -c Release
