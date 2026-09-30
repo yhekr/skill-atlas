@@ -11,15 +11,19 @@ public sealed record ScanResult(
     IReadOnlyList<Skill> Skills,
     IReadOnlyList<string> Warnings)
 {
-    public ScanResult Filter(string? query) => string.IsNullOrWhiteSpace(query)
-        ? this
-        : this with
+    public ScanResult Filter(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return this;
+        var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return this with
         {
-            Skills = Skills.Where(s =>
-                s.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                s.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                s.Path.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray()
+            Skills = Skills.Where(s => terms.All(term =>
+                s.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                s.Description.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                s.Path.Contains(term, StringComparison.OrdinalIgnoreCase))).ToArray()
         };
+    }
 }
 
 public class ScanException(string message) : Exception(message);

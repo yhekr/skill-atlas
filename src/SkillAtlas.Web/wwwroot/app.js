@@ -1,5 +1,7 @@
 'use strict';
 
+import { filterSkills } from './skill-filter.mjs?v=filter-1';
+
 const $ = id => document.getElementById(id);
 const state = { scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, similarController: null, scanVersion: 0, documentVersion: 0, similarVersion: 0, view: 'preview' };
 
@@ -35,10 +37,10 @@ function emptyReader(title, description) {
 }
 
 function renderSkills() {
-  const query = $('skill-filter').value.trim().toLocaleLowerCase();
+  const query = $('skill-filter').value.trim();
   const skills = state.scan?.skills || [];
-  const matching = skills.map((skill, index) => ({ skill, index })).filter(({ skill }) =>
-    [skill.name, skill.description, skill.path].some(text => text.toLocaleLowerCase().includes(query)));
+  const matching = filterSkills(skills, query);
+  $('clear-filter').hidden = !$('skill-filter').value;
   $('skill-list').replaceChildren();
   for (const { skill, index } of matching) {
     const button = document.createElement('button');
@@ -62,7 +64,7 @@ function renderSkills() {
   if (state.scan) {
     $('sidebar-count').textContent = query ? `${matching.length} / ${skills.length}` : String(skills.length);
     $('list-empty').querySelector('p').textContent = query ? 'No matching skills.' : 'No skills found.';
-    $('list-empty').querySelector('span:last-child').textContent = query ? 'Try another name or keyword.' : 'Try a different repository or branch.';
+    $('list-empty').querySelector('span:last-child').textContent = query ? 'Try fewer words or clear the filter.' : 'Try a different repository or branch.';
   }
 }
 
@@ -270,6 +272,15 @@ $('scan-form').addEventListener('submit', scanRepository);
 $('similar-button').addEventListener('click', findSimilar);
 $('cancel-button').addEventListener('click', () => state.scanController?.abort());
 $('skill-filter').addEventListener('input', renderSkills);
+function clearFilter() {
+  $('skill-filter').value = '';
+  renderSkills();
+  $('skill-filter').focus();
+}
+$('clear-filter').addEventListener('click', clearFilter);
+$('skill-filter').addEventListener('keydown', event => {
+  if (event.key === 'Escape') { event.preventDefault(); clearFilter(); }
+});
 $('preview-tab').addEventListener('click', () => setView('preview'));
 $('source-tab').addEventListener('click', () => setView('source'));
 for (const tab of [$('preview-tab'), $('source-tab')]) tab.addEventListener('keydown', event => {

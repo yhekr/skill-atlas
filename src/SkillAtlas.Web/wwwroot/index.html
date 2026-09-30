@@ -8,8 +8,8 @@
   <link rel="icon" href="/favicon.svg?v=mono-1" type="image/svg+xml">
   <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/JetBrainsMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/app.css?v=similar-1">
-  <script src="/app.js?v=similar-1" defer></script>
+  <link rel="stylesheet" href="/app.css?v=filter-1">
+  <script type="module" src="/app.js?v=filter-1"></script>
 </head>
 <body>
   <header class="topbar">
@@ -49,8 +49,9 @@
       <div class="workspace-toolbar"><div class="workspace-title"><span class="step-number">02</span><h2 id="result-title">Explore the skills</h2><span id="skill-count" class="count-badge" hidden></span></div><div class="workspace-meta"><span id="revision" class="revision" hidden></span><span class="read-only"><span class="status-dot"></span> Read only</span></div></div>
       <div class="explorer-layout">
         <aside class="sidebar" aria-label="Found skills">
-          <div class="sidebar-heading"><span>EXPLORER / SKILLS</span><span id="sidebar-count">—</span></div>
-          <div class="filter-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="skill-filter" type="search" placeholder="Filter skills…" aria-label="Filter skills" disabled autocomplete="off"></div>
+          <div class="sidebar-heading"><span>EXPLORER / SKILLS</span><span id="sidebar-count" role="status" aria-live="polite" aria-atomic="true">—</span></div>
+          <div class="filter-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="skill-filter" type="search" placeholder="e.g. gradle tests" aria-label="Filter skills" aria-describedby="filter-help" aria-controls="skill-list" disabled autocomplete="off" spellcheck="false"><button id="clear-filter" type="button" aria-label="Clear filter" hidden>×</button></div>
+          <p id="filter-help" class="filter-help">All words · name + description</p>
           <div id="skill-list" class="skill-list"></div>
           <div id="list-empty" class="list-empty"><span class="empty-list-icon" aria-hidden="true">[ ]</span><p>No repository loaded.</p><span>Run a scan to get started.</span></div>
           <div class="sidebar-footer"><span aria-hidden="true">✓</span> mirrored skills deduplicated</div>

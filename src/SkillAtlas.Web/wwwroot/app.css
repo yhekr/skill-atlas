@@ -115,9 +115,13 @@ input::placeholder { color: #9999a4; opacity: 1; }
 .explorer-layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); height: 62vh; min-height: 490px; max-height: 850px; }
 .sidebar { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: #f8f8fa; }
 .sidebar-heading { display: flex; justify-content: space-between; gap: 10px; padding: 19px 18px 13px; color: #6d6d78; font-size: 10px; letter-spacing: .7px; }
-.filter-wrap { position: relative; margin: 0 14px 14px; }
+.filter-wrap { position: relative; margin: 0 14px 7px; }
 .filter-wrap svg { position: absolute; left: 11px; top: 11px; width: 15px; height: 15px; color: #72727e; }
-.filter-wrap input { width: 100%; padding: 9px 12px 9px 34px; border: 1px solid #cdcdd7; border-radius: 3px; background: #fff; color: var(--ink); font-size: 11px; }
+.filter-wrap input { width: 100%; padding: 9px 36px 9px 34px; border: 1px solid #cdcdd7; border-radius: 3px; background: #fff; color: var(--ink); font-size: 11px; }
+.filter-wrap input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.filter-wrap button { position: absolute; right: 3px; top: 3px; width: 30px; height: 30px; border: 0; border-radius: 3px; background: transparent; color: #6334b2; font-size: 18px; }
+.filter-wrap button:hover { background: var(--accent-soft); }
+.filter-help { margin: 0 14px 14px; color: #777080; font-size: 9px; }
 .filter-wrap input::placeholder { color: #75757f; }
 .filter-wrap input:disabled { background: #f0f0f3; }
 .skill-list { flex: 1; min-height: 0; padding-bottom: 10px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #bcb6c9 transparent; }
