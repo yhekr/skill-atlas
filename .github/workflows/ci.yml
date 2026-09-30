@@ -35,6 +35,9 @@ jobs:
         run: dotnet build -c Release --no-restore
       - name: Run unit and integration tests
         run: dotnet test -c Release --no-build --logger "trx" --results-directory artifacts/test-results
+      - name: Test CI watcher scripts
+        shell: pwsh
+        run: ./scripts/Test-CI.ps1
       - name: Package CLI tool
         run: dotnet pack src/SkillAtlas.Cli -c Release --no-build -o artifacts/packages
       - name: Publish web application

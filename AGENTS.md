@@ -20,3 +20,9 @@ Skill Atlas is a .NET 10 solution with a shared scanner, a CLI tool, and a local
 6. For changes being published, verify the GitHub Actions run for the exact pushed commit. Do not report CI as green from a local test run alone.
 
 GitHub Actions is defined in `.github/workflows/ci.yml` and must build and test both Windows and Linux. Never commit generated output, local credentials, or test artifacts.
+
+## CI after commits
+
+The user requested CI startup and polling after every commit. Install the repository-local hook with `scripts/Install-GitHooks.ps1`; `.githooks/post-commit` starts `scripts/Run-CI.ps1 -Background`. It publishes the captured commit with a normal push and polls its GitHub Actions run every 120 seconds. If the hook is unavailable, run the script after committing. Do not issue a duplicate manual push while the watcher is publishing.
+
+Check the exact commit's JSON status in the Git directory under `ci-watch` before reporting CI success. Failures are also logged there. The explicit opt-out is `SKILL_ATLAS_SKIP_CI=1`. Test watcher changes with `scripts/Test-CI.ps1`; those tests run without network access on both CI operating systems.

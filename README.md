@@ -123,3 +123,44 @@ dotnet pack src/SkillAtlas.Cli -c Release -o artifacts
 [CI на GitHub](https://github.com/yhekr/skill-atlas/actions/workflows/ci.yml) запускается на каждом push, pull request и вручную через **Run workflow**. Обе задачи — `ubuntu-latest` и `windows-latest` — проверяют форматирование, собирают всё решение, запускают тесты, создают NuGet-пакет CLI и публикуют веб-приложение в артефакты запуска.
 
 TRX-отчёты сохраняются даже при падении тестов. Успешный запуск содержит скачиваемые пакеты `skill-atlas-ubuntu-latest` и `skill-atlas-windows-latest`. Критерии готовности проекта перечислены в `AGENTS.md`.
+
+### Запуск CI после каждого коммита
+
+Установите хук один раз для каждого клона:
+
+~~~powershell
+./scripts/Install-GitHooks.ps1
+~~~
+
+После каждого `git commit` хук `.githooks/post-commit` запускает `scripts/Run-CI.ps1` в фоне. Скрипт отправляет точный SHA коммита в текущую ветку `origin` обычным push через HTTPS, затем проверяет GitHub Actions **каждые 120 секунд** до завершения (не более 45 минут). Команда commit не ждёт CI. Неотправляемый локальный коммит можно сделать с `SKILL_ATLAS_SKIP_CI=1`.
+
+Нужны PowerShell 7 (либо Windows PowerShell 5.1), Git и настроенная HTTPS-авторизация GitHub через Git Credential Manager. Для API также поддерживаются переменные `GH_TOKEN` / `GITHUB_TOKEN`; авторизация push настраивается в Git отдельно. Токены не записываются в логи. `origin` не изменяется, SSH-адрес нормализуется в HTTPS только для этой операции.
+
+Скрипт отслеживает только `ci.yml` для своего SHA и ветки. Если запуск от push ещё не появился, он ждёт две минуты; затем при необходимости вызывает `workflow_dispatch`, предварительно проверив SHA удалённой ветки. Уже существующий запуск используется повторно. Успехом считается только `success`; ошибка, отмена, отсутствие доступа и таймаут записываются как ошибка. Если следующий push отменил предыдущий запуск по настройке concurrency, предыдущий наблюдатель сообщит `cancelled`.
+
+Логи и JSON-статус каждого коммита находятся в Git-каталоге `ci-watch` (обычно `.git/ci-watch`). При ошибке push локальный коммит сохраняется; автоматического force push нет.
+
+~~~powershell
+# Запустить вручную и дождаться результата (код выхода 0 — успех, 1 — ошибка)
+./scripts/Run-CI.ps1
+
+# Или запустить в фоне
+./scripts/Run-CI.ps1 -Background
+
+# Прочитать статус текущего коммита
+$sha = git rev-parse HEAD
+Get-Content (Join-Path (git rev-parse --absolute-git-dir) "ci-watch/$sha.json")
+
+# Пропустить один коммит
+$env:SKILL_ATLAS_SKIP_CI = '1'
+git commit -m "Local work"
+Remove-Item Env:SKILL_ATLAS_SKIP_CI
+
+# Отключить установленный здесь хук
+git config --local --unset core.hooksPath
+
+# Проверить скрипт без сети и реального ожидания
+./scripts/Test-CI.ps1
+~~~
+
+Установщик меняет только локальный `core.hooksPath` этого репозитория и отказывается перезаписывать другую настройку hooksPath или существующий post-commit hook. Git не переносит эту настройку при клонировании.

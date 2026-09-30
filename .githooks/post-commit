@@ -1,0 +1,17 @@
+#!/bin/sh
+if [ "${SKILL_ATLAS_SKIP_CI:-}" = "1" ]; then
+    echo "Skill Atlas CI: skipped by SKILL_ATLAS_SKIP_CI=1."
+    exit 0
+fi
+root=$(git rev-parse --show-toplevel) || exit 0
+if command -v pwsh >/dev/null 2>&1; then
+    engine=pwsh
+elif command -v powershell.exe >/dev/null 2>&1; then
+    engine=powershell.exe
+else
+    echo "Skill Atlas CI: PowerShell is unavailable; run scripts/Run-CI.ps1 manually." >&2
+    exit 0
+fi
+"$engine" -NoProfile -NonInteractive -File "$root/scripts/Run-CI.ps1" -Background ||
+    echo "Skill Atlas CI could not start. The local commit is preserved." >&2
+exit 0
