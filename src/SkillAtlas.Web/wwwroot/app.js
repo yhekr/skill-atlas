@@ -17,8 +17,8 @@ async function responseJson(response) {
 
 function busy(value) {
   $('scan-button').disabled = value;
-  $('scan-button-label').textContent = value ? 'Scanning…' : 'Explore skills';
-  $('scan-button-icon').textContent = value ? '…' : '→';
+  $('scan-button-label').textContent = value ? 'Scanning…' : 'Run scan';
+  $('scan-button-icon').textContent = value ? '…' : '↵';
   $('cancel-button').hidden = !value;
   $('repository').disabled = value;
   $('reference').disabled = value;
@@ -44,6 +44,7 @@ function renderSkills() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'skill-item' + (state.selected === index ? ' active' : '');
+    button.dataset.index = String(index + 1).padStart(2, '0');
     button.setAttribute('aria-pressed', String(state.selected === index));
     button.setAttribute('aria-label', skill.name);
     const title = document.createElement('span');
@@ -184,7 +185,7 @@ async function scanRepository(event) {
     $('skill-filter').value = '';
     renderSkills();
     renderWarnings(data.warnings);
-    emptyReader(data.skills.length ? 'A little context goes a long way.' : 'No skills here. Yet.',
+    emptyReader(data.skills.length ? 'Select a skill to read.' : 'No skills found.',
       data.skills.length ? 'Select a skill on the left to explore its instructions and see what it can do.' : 'No agent SKILL.md files were found in this repository. Try another repository or branch.');
     $('scan-status').classList.add('idle');
     $('scan-status').textContent = `Found ${data.skills.length} skill${data.skills.length === 1 ? '' : 's'} in ${data.source}.`;
@@ -232,12 +233,12 @@ $('branch-toggle').addEventListener('click', () => {
   if (opening) $('reference').focus();
 });
 $('reference').addEventListener('input', () => {
-  $('branch-toggle').querySelector('span').textContent = $('reference').value.trim() || 'Default branch';
+  $('branch-toggle').querySelector('span').textContent = $('reference').value.trim() || 'default';
 });
 document.querySelectorAll('.example').forEach(button => button.addEventListener('click', () => {
   $('repository').value = button.dataset.repository;
   $('reference').value = '';
-  $('branch-toggle').querySelector('span').textContent = 'Default branch';
+  $('branch-toggle').querySelector('span').textContent = 'default';
   $('branch-field').hidden = true;
   $('branch-toggle').setAttribute('aria-expanded', 'false');
   $('scan-form').requestSubmit();
