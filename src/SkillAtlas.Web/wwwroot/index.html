@@ -8,8 +8,8 @@
   <link rel="icon" href="/favicon.svg?v=mono-1" type="image/svg+xml">
   <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/JetBrainsMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/app.css?v=mono-1">
-  <script src="/app.js?v=mono-1" defer></script>
+  <link rel="stylesheet" href="/app.css?v=similar-1">
+  <script src="/app.js?v=similar-1" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -61,6 +61,12 @@
           <div id="reader-detail" hidden>
             <div class="reader-toolbar"><div class="view-tabs" role="tablist" aria-label="Document view"><button id="preview-tab" role="tab" aria-selected="true" aria-controls="preview" class="view-tab active" type="button">Preview</button><button id="source-tab" role="tab" aria-selected="false" aria-controls="source" class="view-tab" type="button">Source</button></div><div class="reader-actions"><button id="copy-button" type="button" class="subtle-button" aria-label="Copy skill source">Copy</button><a id="source-link" class="source-link" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></div></div>
             <div class="document-heading"><span class="file-label"><span aria-hidden="true">#</span> SKILL.md</span><h2 id="skill-name"></h2><p id="skill-description"></p><div id="skill-path" class="file-path"></div></div>
+            <section id="similar-section" class="similar-section" aria-labelledby="similar-heading" aria-busy="false">
+              <div class="similar-heading"><h3 id="similar-heading">Similar skills</h3><button id="similar-button" type="button">Find similar</button></div>
+              <p>Across this repository. Keyword overlap in names and descriptions, no AI.</p>
+              <div id="similar-status" class="similar-status" role="status" aria-live="polite" hidden></div>
+              <div id="similar-results" class="similar-results"></div>
+            </section>
             <div id="document-status" class="document-status" role="status" aria-live="polite" hidden></div>
             <article id="preview" class="markdown-body" role="tabpanel" aria-labelledby="preview-tab"></article>
             <pre id="source" class="source-code" role="tabpanel" aria-labelledby="source-tab" hidden><code id="source-text"></code></pre>

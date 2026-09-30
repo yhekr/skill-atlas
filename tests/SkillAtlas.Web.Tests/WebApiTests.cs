@@ -12,6 +12,55 @@ namespace SkillAtlas.Web.Tests;
 public sealed class WebApiTests
 {
     [Fact]
+    public async Task SimilarSkillsComeFromTheSameSnapshotAndCanBeOpenedByReturnedIndex()
+    {
+        await using var app = new TestApplication();
+        Skill[] skills = [
+            new("gradle-upgrade", "Update Gradle dependencies", "one/SKILL.md", "https://github.com/owner/repo/blob/abc/one/SKILL.md"),
+            new("gradle-upgrade-tests", "Update Gradle dependencies in tests", "two/SKILL.md", "https://github.com/owner/repo/blob/abc/two/SKILL.md"),
+            new("image-colors", "Draw colorful pictures", "three/SKILL.md", "https://github.com/owner/repo/blob/abc/three/SKILL.md")
+        ];
+        app.Catalog.Scan = new(Guid.NewGuid(), new(new ScanResult("owner/repo", "abc", skills, []),
+            skills.ToDictionary(skill => skill.Path, skill => $"# {skill.Name}")));
+        using var client = app.CreateClient();
+        var response = await client.GetAsync($"/api/scans/{app.Catalog.Scan.Id}/skills/0/similar");
+        response.EnsureSuccessStatusCode();
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var match = Assert.Single(json.GetProperty("matches").EnumerateArray());
+        Assert.Equal(1, match.GetProperty("index").GetInt32());
+        Assert.Equal("gradle-upgrade-tests", match.GetProperty("skill").GetProperty("name").GetString());
+        Assert.Contains("gradle", match.GetProperty("sharedTerms").EnumerateArray().Select(term => term.GetString()));
+        Assert.InRange(match.GetProperty("score").GetDouble(), SkillSimilarity.MinimumScore, 1);
+        Assert.Equal(0, app.Catalog.Calls);
+        var document = await client.GetFromJsonAsync<JsonElement>($"/api/scans/{app.Catalog.Scan.Id}/skills/{match.GetProperty("index").GetInt32()}");
+        Assert.Equal("# gradle-upgrade-tests", document.GetProperty("source").GetString());
+        Assert.Contains("/blob/abc/", document.GetProperty("url").GetString());
+    }
+
+    [Fact]
+    public async Task SimilarityForASingleSkillReturnsAnEmptyArray()
+    {
+        await using var app = new TestApplication();
+        using var client = app.CreateClient();
+        var json = await client.GetFromJsonAsync<JsonElement>($"/api/scans/{app.Catalog.Scan.Id}/skills/0/similar");
+        Assert.Empty(json.GetProperty("matches").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task SimilarityIsLimitedToFiveResults()
+    {
+        await using var app = new TestApplication();
+        var skills = Enumerable.Range(0, 9).Select(index =>
+            new Skill($"gradle-upgrade-{index}", "Gradle dependencies", $"{index}/SKILL.md", "https://github.com/o/r/blob/abc/SKILL.md")).ToArray();
+        app.Catalog.Scan = new(Guid.NewGuid(), new(new("o/r", "abc", skills, []), new Dictionary<string, string>()));
+        using var client = app.CreateClient();
+        var json = await client.GetFromJsonAsync<JsonElement>($"/api/scans/{app.Catalog.Scan.Id}/skills/0/similar");
+        Assert.Equal(5, json.GetProperty("matches").GetArrayLength());
+        Assert.All(json.GetProperty("matches").EnumerateArray(), match => Assert.NotEqual(0, match.GetProperty("index").GetInt32()));
+    }
+
+    [Fact]
     public async Task HomePageServesRepositoryFormAndSecurityHeaders()
     {
         await using var app = new TestApplication();
@@ -90,8 +139,12 @@ public sealed class WebApiTests
         await using var app = new TestApplication();
         using var client = app.CreateClient();
         Assert.Equal(HttpStatusCode.Gone, (await client.GetAsync($"/api/scans/{Guid.NewGuid()}/skills/0")).StatusCode);
+        Assert.Equal(HttpStatusCode.Gone, (await client.GetAsync($"/api/scans/{Guid.NewGuid()}/skills/0/similar")).StatusCode);
         foreach (var index in new[] { -1, 1, 9999 })
+        {
             Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/scans/{app.Catalog.Scan.Id}/skills/{index}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/scans/{app.Catalog.Scan.Id}/skills/{index}/similar")).StatusCode);
+        }
     }
 
     [Theory]
@@ -124,7 +177,7 @@ public sealed class WebApiTests
     private sealed class FakeCatalog : IScanCatalog
     {
         public const string Source = "---\nname: example\ndescription: Example skill\n---\n# Example\n\nRead the **instructions**.";
-        public StoredScan Scan { get; } = new(Guid.NewGuid(), new RepositorySnapshot(
+        public StoredScan Scan { get; set; } = new(Guid.NewGuid(), new RepositorySnapshot(
             new ScanResult("owner/repo", "abc", [new Skill("example", "Example skill", "skills/example/SKILL.md", "https://github.com/owner/repo/blob/abc/skills/example/SKILL.md")], []),
             new Dictionary<string, string> { ["skills/example/SKILL.md"] = Source }));
         public int Calls { get; private set; }

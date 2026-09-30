@@ -82,6 +82,15 @@ app.MapGet("/api/scans/{id:guid}/skills/{index:int}", (Guid id, int index, IScan
     return Results.Ok(new { skill.Name, skill.Path, skill.Url, source, html = SkillMarkdown.Render(source, skill.Url) });
 });
 
+app.MapGet("/api/scans/{id:guid}/skills/{index:int}/similar", (Guid id, int index, IScanCatalog catalog) =>
+{
+    var scan = catalog.Find(id);
+    if (scan is null) return Results.Json(new { error = "This scan has expired. Scan the repository again to find similar skills." }, statusCode: 410);
+    var skills = scan.Snapshot.Catalog.Skills;
+    if (index < 0 || index >= skills.Count) return Results.NotFound(new { error = "Skill not found." });
+    return Results.Ok(new { matches = SkillSimilarity.FindSimilar(skills, index) });
+});
+
 app.Run();
 
 public sealed record ScanRequest(string? Repository, string? Reference);

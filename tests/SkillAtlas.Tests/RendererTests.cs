@@ -7,6 +7,20 @@ namespace SkillAtlas.Tests;
 
 public class RendererTests
 {
+    [Fact]
+    public void SimilarityOutputTreatsMarkupAndControlCharactersAsData()
+    {
+        using var writer = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(writer), Ansi = AnsiSupport.No });
+        var selected = new Skill("[red]gradle", "wrapper", "one/SKILL.md", "https://example.com/one");
+        var other = new Skill("[blue]gradle", "\u001b[31mGradle", "two/SKILL.md", "https://example.com/two");
+        var result = new ScanResult("owner/repo", null, [selected, other], []);
+        ResultRenderer.RenderSimilar(result, selected, [new SimilarSkill(1, other, .5, ["gradle"])], true, console);
+        Assert.Contains("[blue]gradle", writer.ToString());
+        Assert.Contains("50% overlap", writer.ToString());
+        Assert.DoesNotContain("\u001b", writer.ToString(), StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(40)]
     [InlineData(80)]

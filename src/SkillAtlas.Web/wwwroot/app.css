@@ -161,6 +161,21 @@ input::placeholder { color: #9999a4; opacity: 1; }
 .document-heading h2 { margin: 14px 0; color: #25212c; font-size: 22px; line-height: 1.5; font-weight: 700; letter-spacing: -.7px; overflow-wrap: anywhere; }
 .document-heading > p { margin: 0 0 17px; color: #6f6b78; font-size: 12px; line-height: 1.9; }
 .file-path { color: #7b738a; font-size: 10px; line-height: 1.7; overflow-wrap: anywhere; }
+.similar-section { padding: 20px 32px; border-bottom: 1px solid #e9e9ef; background: #fbfaff; }
+.similar-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.similar-heading h3 { margin: 0; font-size: 13px; }
+.similar-heading button { padding: 7px 14px; border: 1px solid #b299dc; border-radius: 20px; color: #6334b2; background: #fff; font-size: 11px; }
+.similar-heading button:hover:not(:disabled) { background: var(--accent-soft); }
+.similar-section > p, .similar-status { margin: 10px 0 0; font-size: 10px; line-height: 1.8; color: #777080; }
+.similar-status { color: #6a429f; }
+.similar-status.error { color: #a73049; }
+.similar-results { display: grid; gap: 8px; margin-top: 12px; }
+.similar-results:empty { margin-top: 0; }
+.similar-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 12px 14px; border: 1px solid #ddd3ee; border-radius: 4px; background: #fff; text-align: left; color: #4d326f; }
+.similar-item:hover { background: #f1ebfc; border-color: #ac8ed7; }
+.similar-item strong { font-size: 11px; font-weight: 400; overflow-wrap: anywhere; }
+.similar-score { font-size: 10px; color: #7643bd; white-space: nowrap; }
+.similar-terms { grid-column: 1 / -1; color: #807487; font-size: 10px; overflow-wrap: anywhere; }
 .document-status { margin: 24px 32px; color: var(--accent); font-size: 12px; line-height: 1.7; }
 .document-status.error { color: #a73049; }
 .document-status button { border: 1px solid #b87987; border-radius: 3px; padding: 5px 10px; margin-left: 10px; color: inherit; background: #fff; font-size: 11px; }
@@ -278,6 +293,8 @@ input::placeholder { color: #9999a4; opacity: 1; }
   .reader-actions { gap: 8px; padding: 5px; }
   .source-link, .reader-actions .subtle-button { font-size: 9px; }
   .document-heading { padding: 24px 20px; }
+  .similar-section { padding: 20px; }
+  .similar-item { grid-template-columns: 1fr; }
   .document-heading h2 { font-size: 18px; }
   .document-heading > p { font-size: 11px; }
   .markdown-body { padding: 13px 20px 30px; font-size: 12px; }

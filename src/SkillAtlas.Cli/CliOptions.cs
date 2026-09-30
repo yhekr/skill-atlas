@@ -2,6 +2,8 @@ namespace SkillAtlas.Cli;
 
 public sealed record CliOptions(string? Source, string? Reference, string? Query, bool Json, bool NoColor, bool Help, bool Version)
 {
+    public string? SimilarTo { get; init; }
+
     public static CliOptions Parse(string[] args)
     {
         if (args.Length == 0 || args is ["--help"] or ["-h"] || args is ["scan", "--help"] or ["scan", "-h"])
@@ -10,7 +12,7 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
             return new(null, null, null, false, false, false, true);
         if (args[0] != "scan") throw new ArgumentException($"Unknown command '{args[0]}'.");
 
-        string? source = null, reference = null, query = null;
+        string? source = null, reference = null, query = null, similarTo = null;
         var json = false;
         var noColor = false;
         var positional = false;
@@ -26,6 +28,7 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
                     case "--no-color": noColor = true; break;
                     case "--ref": reference = Value(args, ref i); break;
                     case "--query": case "-q": query = Value(args, ref i); break;
+                    case "--similar": similarTo = Value(args, ref i); break;
                     case "--help": case "-h": return new(null, null, null, false, false, true, false);
                     default: throw new ArgumentException($"Unknown option '{argument}'.");
                 }
@@ -34,7 +37,9 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
             else throw new ArgumentException("Specify exactly one repository or directory.");
         }
         if (source is null) throw new ArgumentException("The scan command requires a repository or directory.");
-        return new(source, reference, query, json, noColor, false, false);
+        if (query is not null && similarTo is not null)
+            throw new ArgumentException("Use --query or --similar, not both in the same scan.");
+        return new(source, reference, query, json, noColor, false, false) { SimilarTo = similarTo };
     }
 
     private static string Value(string[] args, ref int index)
@@ -54,6 +59,7 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
         Options:
           --ref <branch-or-tag>  Scan a specific branch or tag (default: default branch)
           --query, -q <text>     Filter name, description and path (case-insensitive)
+          --similar <name|path>  Find up to 5 related skills by keyword overlap (no AI)
           --json                Write structured JSON to stdout
           --no-color            Plain text output without ANSI formatting
           --help, -h            Show this help
@@ -63,6 +69,7 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
           skill-atlas scan https://github.com/JetBrains/kotlin
           skill-atlas scan owner/repo --ref main --query gradle
           skill-atlas scan . --json
+          skill-atlas scan owner/repo --similar build-gradle
 
         Requires Git 2.25+ for remote scans; private repositories use your Git credentials.
         Skills are read as data. No instructions, hooks, or scripts from them are executed.

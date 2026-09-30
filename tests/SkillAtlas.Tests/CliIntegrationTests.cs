@@ -8,6 +8,56 @@ public class CliIntegrationTests
     private static readonly string CliAssembly = typeof(CliOptions).Assembly.Location;
 
     [Fact]
+    public async Task SimilarityJsonUsesActualScannerAndReportsSharedTerms()
+    {
+        using var workspace = new TestWorkspace();
+        workspace.Write("one/SKILL.md", "---\nname: gradle-upgrade\ndescription: Update Gradle dependencies\n---");
+        workspace.Write("two/SKILL.md", "---\nname: gradle-upgrade-tests\ndescription: Update Gradle dependencies in tests\n---");
+        workspace.Write("three/SKILL.md", "---\nname: image-colors\ndescription: Draw colorful pictures\n---");
+        var result = await workspace.RunAsync("dotnet", CliAssembly, "scan", workspace.Root, "--similar", "gradle-upgrade", "--json");
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Error);
+        using var json = JsonDocument.Parse(result.Output);
+        Assert.Equal("gradle-upgrade", json.RootElement.GetProperty("selected").GetProperty("name").GetString());
+        var match = Assert.Single(json.RootElement.GetProperty("matches").EnumerateArray());
+        Assert.Equal("gradle-upgrade-tests", match.GetProperty("skill").GetProperty("name").GetString());
+        Assert.InRange(match.GetProperty("score").GetDouble(), 0.15, 1);
+        Assert.Contains("gradle", match.GetProperty("sharedTerms").EnumerateArray().Select(term => term.GetString()));
+        Assert.False(json.RootElement.TryGetProperty("skills", out _));
+    }
+
+    [Fact]
+    public async Task SimilarityRequiresAnUnambiguousSkillAndAcceptsItsExactPath()
+    {
+        using var workspace = new TestWorkspace();
+        workspace.Write("one/SKILL.md", "---\nname: build\ndescription: Gradle dependencies\n---");
+        workspace.Write("two/SKILL.md", "---\nname: build\ndescription: Gradle tests\n---");
+        foreach (var selector in new[] { "build", "missing" })
+        {
+            var result = await workspace.RunAsync("dotnet", CliAssembly, "scan", workspace.Root, "--similar", selector, "--json");
+            Assert.Equal(2, result.ExitCode);
+            Assert.Empty(result.Output);
+            Assert.Contains("Error:", result.Error);
+        }
+        var byPath = await workspace.RunAsync("dotnet", CliAssembly, "scan", workspace.Root, "--similar", "one/SKILL.md", "--no-color");
+        Assert.Equal(0, byPath.ExitCode);
+        Assert.Contains("overlap", byPath.Output);
+        Assert.Contains("two/SKILL.md", byPath.Output);
+        Assert.DoesNotContain("\u001b", byPath.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NoSimilarSkillsIsSuccessfulAndDoesNotSuggestTheSelectedSkill()
+    {
+        using var workspace = new TestWorkspace();
+        workspace.Write("one/SKILL.md", "---\nname: Unique\ndescription: Only one skill.\n---");
+        var result = await workspace.RunAsync("dotnet", CliAssembly, "scan", workspace.Root, "--similar", "Unique", "--no-color");
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("No similar skills found.", result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
     public async Task CheckedInFixtureMatchesTheSlideThroughActualCli()
     {
         using var workspace = new TestWorkspace();

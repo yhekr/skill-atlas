@@ -33,13 +33,24 @@ try
         ? await AnsiConsole.Status().Spinner(Spinner.Known.Dots).StartAsync("Discovering skills…", _ => Scan())
         : await Scan();
     result = result.Filter(options.Query);
+    var selectedIndex = options.SimilarTo is null ? -1 : SkillSimilarity.ResolveIndex(result.Skills, options.SimilarTo);
+    var similar = selectedIndex < 0 ? null : SkillSimilarity.FindSimilar(result.Skills, selectedIndex);
 
     if (options.Json)
-        Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions
+        Console.WriteLine(JsonSerializer.Serialize(selectedIndex < 0 ? (object)result : new
+        {
+            result.Source,
+            result.Revision,
+            selected = result.Skills[selectedIndex],
+            matches = similar,
+            result.Warnings
+        }, new JsonSerializerOptions
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         }));
+    else if (selectedIndex >= 0)
+        ResultRenderer.RenderSimilar(result, result.Skills[selectedIndex], similar!, pretty);
     else
         ResultRenderer.Render(result, pretty, options.Query);
 

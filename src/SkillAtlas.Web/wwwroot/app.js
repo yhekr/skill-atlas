@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-const state = { scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, scanVersion: 0, documentVersion: 0, view: 'preview' };
+const state = { scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, similarController: null, scanVersion: 0, documentVersion: 0, similarVersion: 0, view: 'preview' };
 
 function showError(message) {
   $('scan-error').textContent = message;
@@ -77,6 +77,7 @@ function setView(view) {
 
 async function selectSkill(index) {
   state.documentController?.abort();
+  resetSimilar();
   const version = ++state.documentVersion;
   const scan = state.scan;
   if (!scan) return;
@@ -133,6 +134,67 @@ async function selectSkill(index) {
   }
 }
 
+function resetSimilar() {
+  state.similarController?.abort();
+  state.similarController = null;
+  state.similarVersion++;
+  $('similar-results').replaceChildren();
+  $('similar-status').hidden = true;
+  $('similar-status').classList.remove('error');
+  $('similar-section').setAttribute('aria-busy', 'false');
+  $('similar-button').disabled = false;
+  $('similar-button').textContent = 'Find similar';
+}
+
+async function findSimilar() {
+  if (!state.scan || state.selected === null || state.similarController) return;
+  const version = ++state.similarVersion;
+  const controller = new AbortController();
+  state.similarController = controller;
+  $('similar-button').disabled = true;
+  $('similar-section').setAttribute('aria-busy', 'true');
+  $('similar-results').replaceChildren();
+  $('similar-status').hidden = false;
+  $('similar-status').classList.remove('error');
+  $('similar-status').textContent = 'Comparing skill names and descriptions…';
+  try {
+    const url = '/api/scans/' + state.scan.scanId + '/skills/' + state.selected + '/similar';
+    const data = await fetch(url, { signal: controller.signal }).then(responseJson);
+    if (version !== state.similarVersion) return;
+    for (const match of data.matches) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'similar-item';
+      const name = document.createElement('strong');
+      name.textContent = match.skill.name;
+      const score = document.createElement('span');
+      score.className = 'similar-score';
+      score.textContent = Math.round(match.score * 100) + '% overlap';
+      const shared = document.createElement('span');
+      shared.className = 'similar-terms';
+      shared.textContent = 'Shared: ' + match.sharedTerms.slice(0, 6).join(', ') + (match.sharedTerms.length > 6 ? '…' : '');
+      button.append(name, score, shared);
+      button.addEventListener('click', () => selectSkill(match.index));
+      $('similar-results').append(button);
+    }
+    $('similar-status').textContent = data.matches.length
+      ? 'Found ' + data.matches.length + ' related skill' + (data.matches.length === 1 ? '.' : 's.')
+      : 'No similar skills found. There is not enough keyword overlap.';
+    $('similar-button').textContent = 'Find again';
+  } catch (error) {
+    if (error.name === 'AbortError' || version !== state.similarVersion) return;
+    $('similar-status').classList.add('error');
+    $('similar-status').textContent = error instanceof TypeError ? 'Could not compare skills. Try again.' : error.message;
+    $('similar-button').textContent = 'Try again';
+  } finally {
+    if (version === state.similarVersion) {
+      state.similarController = null;
+      $('similar-button').disabled = false;
+      $('similar-section').setAttribute('aria-busy', 'false');
+    }
+  }
+}
+
 function renderWarnings(warnings) {
   $('warnings').replaceChildren();
   $('warnings').hidden = warnings.length === 0;
@@ -170,6 +232,7 @@ async function scanRepository(event) {
     }).then(responseJson);
     if (version !== state.scanVersion) return;
     state.documentController?.abort();
+    resetSimilar();
     state.documentVersion++;
     state.scan = data;
     state.selected = null;
@@ -204,6 +267,7 @@ async function scanRepository(event) {
 }
 
 $('scan-form').addEventListener('submit', scanRepository);
+$('similar-button').addEventListener('click', findSimilar);
 $('cancel-button').addEventListener('click', () => state.scanController?.abort());
 $('skill-filter').addEventListener('input', renderSkills);
 $('preview-tab').addEventListener('click', () => setView('preview'));

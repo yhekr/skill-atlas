@@ -5,6 +5,43 @@ namespace SkillAtlas.Cli;
 
 public static class ResultRenderer
 {
+    public static void RenderSimilar(ScanResult result, Skill selected, IReadOnlyList<SimilarSkill> matches,
+        bool pretty, IAnsiConsole? console = null)
+    {
+        console ??= AnsiConsole.Console;
+        var heading = $"Similar to {selected.Name} in {result.Source}";
+        if (pretty) console.MarkupLine($"[bold deepskyblue1]{Escape(heading)}[/]");
+        else Console.WriteLine(SafeText(heading));
+        var explanation = "Keyword overlap, not semantic similarity. Names weigh 3x descriptions; no AI.";
+        if (pretty) console.WriteLine(explanation);
+        else Console.WriteLine(explanation);
+        if (matches.Count == 0)
+        {
+            if (pretty) console.WriteLine("No similar skills found.");
+            else Console.WriteLine("No similar skills found.");
+        }
+        foreach (var match in matches)
+        {
+            var score = Math.Round(match.Score * 100).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var shared = string.Join(", ", match.SharedTerms.Take(8));
+            if (pretty)
+            {
+                console.MarkupLine($"\n[bold]{Escape(match.Skill.Name)}[/]  [springgreen2]{score}% overlap[/]");
+                console.MarkupLine($"[grey]{Escape(match.Skill.Description)}[/]");
+                console.MarkupLine($"Shared: {Escape(shared)}");
+                console.MarkupLine($"[deepskyblue1 link={Escape(match.Skill.Url)}]{Escape(match.Skill.Path)} ↗[/]");
+            }
+            else
+            {
+                Console.WriteLine($"\n{SafeText(match.Skill.Name)}  {score}% overlap");
+                Console.WriteLine($"   {SafeText(match.Skill.Description)}");
+                Console.WriteLine($"   Shared: {SafeText(shared)}");
+                Console.WriteLine($"   {SafeText(match.Skill.Path)}");
+                Console.WriteLine($"   {SafeText(match.Skill.Url)}");
+            }
+        }
+    }
+
     public static void Render(ScanResult result, bool pretty, string? query, IAnsiConsole? console = null)
     {
         console ??= AnsiConsole.Console;
