@@ -132,7 +132,9 @@ JSON содержит `source`, `revision`, `skills` (`name`, `description`, `pa
 
 Скрипт создаёт соседний worktree `../atlas-task` и ветку `atlas-task` от текущего HEAD. Имя: 2–63 строчные латинские буквы, цифры и дефисы; первый символ — буква или цифра, `default` зарезервировано sbx. Существующая ветка используется без сброса, а подходящий worktree повторно открывается с сохранением изменений. Незакоммиченные изменения исходной папки не копируются. Чужая папка, другой репозиторий, detached HEAD или уже занятая ветка не перезаписываются.
 
-Нужны **Bash, Git, jq, sbx и JetBrains Central CLI**, в котором уже выполнен `central login`. Ищется `central` или `jbcentral`; путь можно задать через `CENTRAL_BIN`. Вызов соответствует CLI sbx 0.46.0: `sbx run --name NAME -e KEY=VALUE codex WORKTREE -- CODEX_ARGS`. Параметры после `--` передаются Codex. Аргумент `:git` этой версией не поддерживается. Sandbox видит файлы worktree; Git-метаданные родительского репозитория не монтируются, поэтому `git status`, коммиты и переключение веток выполняйте на хосте. Это ограничение [режима host worktree](https://docs.docker.com/ai/sandboxes/workflows/git/).
+Нужны **Bash, Git, jq, sbx и JetBrains Central CLI**, в котором уже выполнен `central login`. Ищется `central` или `jbcentral`; путь можно задать через `CENTRAL_BIN`. Вызов соответствует примеру с двумя рабочими папками: `sbx run --name NAME -e KEY=VALUE codex WORKTREE GIT_COMMON_DIR -- CODEX_ARGS`. Второй путь — настоящий общий каталог `.git`, найденный через Git; это работает и при запуске из вложенной папки или другого worktree. Параметры после `--` передаются Codex.
+
+Worktree и общий `.git` монтируются на запись, чтобы Git мог читать историю и создавать коммиты. Ветки и Git-метаданные остаются общими с хостовым репозиторием. Скрипт передаёт `GIT_DIR` и `GIT_WORK_TREE` с путями внутри sandbox: на Windows это позволяет Git в Linux обойти указатель `C:/…` в файле `.git`. Git Bash сохраняет эти значения в форме `/c/…` при вызове `sbx.exe`. Файл `.git` на хосте не переписывается. Эти переменные привязывают команды Git в сессии к выбранному worktree; для работы с другим репозиторием сначала сбросьте их.
 
 Официальный [Docker Sandboxes](https://github.com/docker/sbx-releases) устанавливается на macOS командой `brew install docker/tap/sbx`, на Windows — `winget install --id Docker.sbx --exact --source winget`. После установки откройте новый терминал и выполните `sbx login`. Для Bash на Windows можно использовать Git Bash; `jq` тоже должен быть доступен в его `PATH`.
 
@@ -148,6 +150,14 @@ Central запускается через `proxy start --return-key`; `--ensure-
 bash -n sbx-codex.sh
 bash scripts/test-sbx-codex.sh
 ~~~
+
+Дополнительная проверка Git в настоящем Docker-контейнере (нужны работающий Docker и сеть для Alpine/Git):
+
+~~~bash
+SBX_TEST_DOCKER=1 bash scripts/test-sbx-codex.sh
+~~~
+
+Она монтирует только временный тестовый репозиторий, проверяет `git status` и коммит с параметрами, сформированными скриптом. Настоящие ключи и файлы авторизации в этот тест не передаются.
 
 Тесты используют настоящий Git и jq, но подменяют Central и sbx. Для проверки установленного окружения без запроса к модели запустите `./sbx-codex.sh atlas-smoke -- --version`. При ошибках службы выполните `sbx diagnose`: проверка Docker Engine не заменяет проверку Docker Sandboxes. Результат реального запуска и текущие ограничения записаны в [TESTING.md](TESTING.md).
 

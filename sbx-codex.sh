@@ -9,7 +9,7 @@ Usage: ./sbx-codex.sh <name> [-- <Codex arguments...>]
 
 Creates/reuses ../<name> and the branch <name>, then starts Codex in sbx.
 Requires Bash, Git, jq, sbx, and an authenticated central (or jbcentral).
-The sbx CLI must support: run --name NAME -e KEY=VALUE codex WORKTREE -- ARGS
+The sbx CLI must support: run --name NAME -e KEY=VALUE codex WORKTREE GIT_COMMON_DIR -- ARGS
 
 Optional environment:
   CENTRAL_BIN         Path to the Central executable.
@@ -75,6 +75,18 @@ else
   fi
 fi
 
+git_common=$(common_dir "$worktree")
+git_dir=$(cd -- "$worktree" && cd -- "$(git rev-parse --absolute-git-dir)" && pwd -P)
+
+# Git Bash's /c/... paths match sbx's Linux mounts. Keep environment values in
+# that form when invoking the native Windows CLI; workspace arguments still
+# receive the normal MSYS path conversion.
+case "${OSTYPE:-}" in
+  msys*|cygwin*)
+    export MSYS2_ARG_CONV_EXCL="${MSYS2_ARG_CONV_EXCL:+$MSYS2_ARG_CONV_EXCL;}GIT_DIR=;GIT_WORK_TREE="
+    ;;
+esac
+
 start_args=(proxy start --return-key)
 proxy_help=$("$central_bin" proxy start --help)
 if [[ "$proxy_help" == *--ensure-updated* ]]; then start_args+=(--ensure-updated); fi
@@ -98,11 +110,14 @@ base_url="http://$proxy_host:$port/wire/$key/codex/openai/v1"
 
 printf 'Starting Codex in %s (branch %s), via Central on %s:%s.\n' "$worktree" "$name" "$proxy_host" "$port"
 # Provider overrides apply only to this Codex process. No host auth/config is copied.
-# sbx mounts the worktree's files; Git metadata remains on the host.
+# Mount the common .git directory as a second workspace, as in the sbx example.
+# Explicit Git paths also resolve Windows .git pointer files inside Linux.
 exec sbx run --name "$name" \
   -e "OPENAI_API_KEY=$key" \
   -e "OPENAI_BASE_URL=$base_url" \
-  codex "$worktree" -- \
+  -e "GIT_DIR=$git_dir" \
+  -e "GIT_WORK_TREE=$worktree" \
+  codex "$worktree" "$git_common" -- \
   -c 'model_provider="jetbrains_central"' \
   -c 'model_providers.jetbrains_central.name="JetBrains Central"' \
   -c "model_providers.jetbrains_central.base_url=\"$base_url\"" \

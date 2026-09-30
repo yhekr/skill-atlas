@@ -32,6 +32,9 @@ cat > "$test_root/bin/sbx" <<'STUB'
 #!/usr/bin/env bash
 set -eu
 printf '%s\0' "$@" > "$SBX_TEST_CAPTURE"
+if [[ -n "${SBX_TEST_NATIVE_PROBE:-}" ]]; then
+  powershell.exe -NoProfile -NonInteractive -File "$SBX_TEST_NATIVE_PROBE" "$@" > "$SBX_TEST_NATIVE_CAPTURE"
+fi
 exit "${MOCK_SBX_EXIT:-0}"
 STUB
 chmod +x "$test_root/bin/central" "$test_root/bin/sbx"
@@ -52,12 +55,15 @@ new_fixture() {
   export SBX_TEST_CAPTURE="$fixture/sbx.args"
   export MOCK_KEY='fake_proxy-key.123'
   export MOCK_CENTRAL_FAIL=0 MOCK_SBX_EXIT=0 MOCK_UPDATE_FLAG=''
-  unset CENTRAL_PROXY_PORT CENTRAL_PROXY_HOST
+  unset CENTRAL_PROXY_PORT CENTRAL_PROXY_HOST SBX_TEST_NATIVE_PROBE SBX_TEST_NATIVE_CAPTURE
   printf '{"proxy_port":19516}\n' > "$CENTRAL_CONFIG"
 }
 run_launcher() {
   status=0
   (cd -- "$fixture/project/subdir" && bash "$launcher" "$@") > "$fixture/output" 2>&1 || status=$?
+}
+canonical_git_dir() {
+  (cd -- "$1" && cd -- "$(git rev-parse --absolute-git-dir)" && pwd -P)
 }
 require() {
   if ! "$@"; then
@@ -116,6 +122,9 @@ require test "$status" -eq 0
 require test -f "$fixture/feature/.git"
 require test "$(git -C "$fixture/feature" branch --show-current)" = feature
 require has_arg "$fixture/feature"
+require has_arg "$fixture/project/.git"
+require has_arg "GIT_DIR=$(canonical_git_dir "$fixture/feature")"
+require has_arg "GIT_WORK_TREE=$fixture/feature"
 if has_arg ':git'; then echo 'Unsupported :git workspace argument.' >&2; exit 1; fi
 require has_arg '--'
 require has_arg 'OPENAI_API_KEY=fake_proxy-key.123'
@@ -131,23 +140,42 @@ pass 'Create worktree; preserve paths/arguments; configure Responses without lea
 
 sbx_args=()
 while IFS= read -r -d '' arg; do sbx_args+=("$arg"); done < "$SBX_TEST_CAPTURE"
-require test "${#sbx_args[@]}" -eq 25
+require test "${#sbx_args[@]}" -eq 30
 require test "${sbx_args[0]}" = run
 require test "${sbx_args[1]}" = --name
 require test "${sbx_args[2]}" = feature
-require test "${sbx_args[7]}" = codex
-require test "${sbx_args[8]}" = "$fixture/feature"
-require test "${sbx_args[9]}" = --
-require test "${sbx_args[22]}" = --model
-require test "${sbx_args[23]}" = model-from-central
-require test "${sbx_args[24]}" = 'Prompt with spaces; $(not-a-command)'
-pass 'Use one workspace followed by the sbx argument separator, without a :git mount'
+require test "${sbx_args[11]}" = codex
+require test "${sbx_args[12]}" = "$fixture/feature"
+require test "${sbx_args[13]}" = "$fixture/project/.git"
+require test "${sbx_args[14]}" = --
+require test "${sbx_args[27]}" = --model
+require test "${sbx_args[28]}" = model-from-central
+require test "${sbx_args[29]}" = 'Prompt with spaces; $(not-a-command)'
+pass 'Mount worktree and common Git directory before the sbx argument separator'
 
 printf 'uncommitted\n' > "$fixture/feature/keep.txt"
 run_launcher feature
 require test "$status" -eq 0
 require test "$(cat "$fixture/feature/keep.txt")" = uncommitted
 pass 'Reuse the matching worktree without losing local changes'
+
+mkdir -p "$fixture/feature/subdir"
+status=0
+(cd -- "$fixture/feature/subdir" && bash "$launcher" second) > "$fixture/output" 2>&1 || status=$?
+require test "$status" -eq 0
+require has_arg "$fixture/project/.git"
+require has_arg "GIT_DIR=$(canonical_git_dir "$fixture/second")"
+require has_arg "GIT_WORK_TREE=$fixture/second"
+pass 'Resolve the original common Git directory when launched inside a linked worktree'
+
+new_fixture
+git -C "$fixture/project" worktree add -q -b feature "$fixture/original-location"
+git -C "$fixture/project" worktree move "$fixture/original-location" "$fixture/feature"
+run_launcher feature
+require test "$status" -eq 0
+require has_arg "GIT_DIR=$fixture/project/.git/worktrees/original-location"
+require has_arg "GIT_WORK_TREE=$fixture/feature"
+pass 'Resolve the actual Git directory after a worktree has been moved'
 
 new_fixture
 git -C "$fixture/project" branch existing
@@ -293,5 +321,63 @@ run_launcher feature
 require test "$status" -eq 17
 require has_arg 'OPENAI_API_KEY=fake_proxy-key.123'
 pass 'Accept Windows line endings and propagate the sbx exit code'
+
+if [[ "${SBX_TEST_DOCKER:-0}" == 1 ]]; then
+  command -v docker >/dev/null || { echo 'Docker smoke test requires docker.' >&2; exit 1; }
+  new_fixture
+  run_launcher docker-git
+  require test "$status" -eq 0
+  sbx_args=()
+  while IFS= read -r -d '' arg; do sbx_args+=("$arg"); done < "$SBX_TEST_CAPTURE"
+  docker_worktree=${sbx_args[12]}
+  docker_common=${sbx_args[13]}
+  docker_git_dir=${sbx_args[8]#GIT_DIR=}
+  docker_host_worktree=$docker_worktree
+  docker_host_common=$docker_common
+  windows_pointer=0
+  case "${OSTYPE:-}" in
+    msys*|cygwin*)
+      docker_host_worktree=$(cygpath -am "$docker_worktree")
+      docker_host_common=$(cygpath -am "$docker_common")
+      windows_pointer=1
+      # Exercise the same MSYS-to-native argument boundary as sbx.exe.
+      export SBX_TEST_NATIVE_PROBE="$fixture/native-args.ps1"
+      export SBX_TEST_NATIVE_CAPTURE="$fixture/native-args.json"
+      printf 'ConvertTo-Json -InputObject @($args)\n' > "$SBX_TEST_NATIVE_PROBE"
+      run_launcher docker-git
+      require test "$status" -eq 0
+      MSYS2_ARG_CONV_EXCL='GIT_DIR=;GIT_WORK_TREE=' require jq -e \
+        --arg dir "GIT_DIR=$docker_git_dir" --arg tree "GIT_WORK_TREE=$docker_worktree" \
+        '.[8] == $dir and .[10] == $tree' "$SBX_TEST_NATIVE_CAPTURE" >/dev/null
+      ;;
+  esac
+  # Only the throwaway fixture and its .git are mounted. No Central key or
+  # host credentials are passed to Docker; the launcher used a fake key.
+  MSYS2_ARG_CONV_EXCL='*' docker run --rm \
+    --mount "type=bind,source=$docker_host_worktree,target=$docker_worktree" \
+    --mount "type=bind,source=$docker_host_common,target=$docker_common" \
+    -e "GIT_DIR=$docker_git_dir" -e "GIT_WORK_TREE=$docker_worktree" \
+    -e "EXPECT_WINDOWS_POINTER=$windows_pointer" -w "$docker_worktree" \
+    alpine:3.22 sh -eu -c '
+      apk add --no-cache git >/dev/null
+      git config --global --add safe.directory "$GIT_WORK_TREE"
+      if [ "$EXPECT_WINDOWS_POINTER" = 1 ]; then
+        if env -u GIT_DIR -u GIT_WORK_TREE git status --porcelain >/dev/null 2>&1; then
+          echo "Expected a Windows .git pointer to require the explicit Linux Git paths." >&2
+          exit 1
+        fi
+      fi
+      test "$(git branch --show-current)" = docker-git
+      test -z "$(git status --porcelain)"
+      printf "created inside Docker\n" > docker-smoke.txt
+      git add docker-smoke.txt
+      git -c core.hooksPath=/dev/null -c user.name=Tests -c user.email=tests@example.invalid commit -qm docker-git-smoke
+      test -z "$(git status --porcelain)"
+    ' > "$fixture/docker-output" 2>&1 || { cat "$fixture/docker-output" >&2; exit 1; }
+  require test "$(git -C "$fixture/docker-git" log -1 --format=%s)" = docker-git-smoke
+  require test "$(git -C "$fixture/project" log -1 --format=%s)" = initial
+  require test -z "$(git -C "$fixture/docker-git" status --porcelain)"
+  pass 'Real Docker: Git status and commit work with launcher mounts and Windows pointer files'
+fi
 
 printf '%s tests passed.\n' "$passed"
