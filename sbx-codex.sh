@@ -9,7 +9,7 @@ Usage: ./sbx-codex.sh <name> [-- <Codex arguments...>]
 
 Creates/reuses ../<name> and the branch <name>, then starts Codex in sbx.
 Requires Bash, Git, jq, sbx, and an authenticated central (or jbcentral).
-The sbx CLI must support: run --name NAME -e KEY=VALUE codex WORKTREE :git -- ARGS
+The sbx CLI must support: run --name NAME -e KEY=VALUE codex WORKTREE -- ARGS
 
 Optional environment:
   CENTRAL_BIN         Path to the Central executable.
@@ -24,8 +24,8 @@ if [[ "$#" -eq 0 ]]; then usage >&2; exit 2; fi
 if [[ "$1" == --help || "$1" == -h ]]; then usage; exit 0; fi
 name=$1
 shift
-[[ "$name" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]] ||
-  die 'Use a name of 1-63 lowercase letters, digits, hyphens or underscores; start with a letter or digit.'
+[[ "$name" =~ ^[a-z0-9][a-z0-9-]{1,62}$ && "$name" != default ]] ||
+  die 'Use a name of 2-63 lowercase letters, digits or hyphens; start with a letter or digit. The name default is reserved.'
 if [[ "$#" -gt 0 ]]; then
   [[ "$1" == -- ]] || die 'Put Codex arguments after --.'
   shift
@@ -98,11 +98,11 @@ base_url="http://$proxy_host:$port/wire/$key/codex/openai/v1"
 
 printf 'Starting Codex in %s (branch %s), via Central on %s:%s.\n' "$worktree" "$name" "$proxy_host" "$port"
 # Provider overrides apply only to this Codex process. No host auth/config is copied.
-# :git is the sbx integration that exposes linked-worktree Git metadata.
+# sbx mounts the worktree's files; Git metadata remains on the host.
 exec sbx run --name "$name" \
   -e "OPENAI_API_KEY=$key" \
   -e "OPENAI_BASE_URL=$base_url" \
-  codex "$worktree" :git -- \
+  codex "$worktree" -- \
   -c 'model_provider="jetbrains_central"' \
   -c 'model_providers.jetbrains_central.name="JetBrains Central"' \
   -c "model_providers.jetbrains_central.base_url=\"$base_url\"" \

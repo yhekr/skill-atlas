@@ -127,11 +127,13 @@ JSON содержит `source`, `revision`, `skills` (`name`, `description`, `pa
 ./sbx-codex.sh atlas-task -- "Проверь проект и предложи улучшения"
 ~~~
 
-Скрипт создаёт соседний worktree `../atlas-task` и ветку `atlas-task` от текущего HEAD. Существующая ветка используется без сброса, а подходящий worktree повторно открывается с сохранением изменений. Незакоммиченные изменения исходной папки не копируются. Чужая папка, другой репозиторий, detached HEAD или уже занятая ветка не перезаписываются.
+Скрипт создаёт соседний worktree `../atlas-task` и ветку `atlas-task` от текущего HEAD. Имя: 2–63 строчные латинские буквы, цифры и дефисы; первый символ — буква или цифра, `default` зарезервировано sbx. Существующая ветка используется без сброса, а подходящий worktree повторно открывается с сохранением изменений. Незакоммиченные изменения исходной папки не копируются. Чужая папка, другой репозиторий, detached HEAD или уже занятая ветка не перезаписываются.
 
-Нужны **Bash, Git, jq, sbx и JetBrains Central CLI**, в котором уже выполнен `central login`. Ищется `central` или `jbcentral`; путь можно задать через `CENTRAL_BIN`. Codex должен быть доступен в образе sandbox. Целевой интерфейс `sbx`: `sbx run --name NAME -e KEY=VALUE codex WORKTREE :git -- CODEX_ARGS`. `:git` обеспечивает доступ к Git-метаданным связанного worktree, а параметры после `--` передаются Codex.
+Нужны **Bash, Git, jq, sbx и JetBrains Central CLI**, в котором уже выполнен `central login`. Ищется `central` или `jbcentral`; путь можно задать через `CENTRAL_BIN`. Вызов соответствует CLI sbx 0.46.0: `sbx run --name NAME -e KEY=VALUE codex WORKTREE -- CODEX_ARGS`. Параметры после `--` передаются Codex. Аргумент `:git` этой версией не поддерживается. Sandbox видит файлы worktree; Git-метаданные родительского репозитория не монтируются, поэтому `git status`, коммиты и переключение веток выполняйте на хосте. Это ограничение [режима host worktree](https://docs.docker.com/ai/sandboxes/workflows/git/).
 
 Официальный [Docker Sandboxes](https://github.com/docker/sbx-releases) устанавливается на macOS командой `brew install docker/tap/sbx`, на Windows — `winget install --id Docker.sbx --exact --source winget`. После установки откройте новый терминал и выполните `sbx login`. Для Bash на Windows можно использовать Git Bash; `jq` тоже должен быть доступен в его `PATH`.
+
+При первом запуске инициализируйте сетевую политику: `sbx policy init balanced`. Docker Sandboxes устанавливается отдельно от Docker Desktop: работающий Docker Engine сам по себе не запускает службу `sandboxd`. На Windows каталог `%LOCALAPPDATA%\DockerSandboxes\bin` должен быть в PATH.
 
 Central запускается через `proxy start --return-key`; `--ensure-updated` добавляется только если он есть в справке установленной версии. Порт читается из `~/.jetbrains-central/config.json`, по умолчанию **19516**. В sandbox передаётся ключ прокси, а провайдер Codex настроен на `http://host.docker.internal:PORT/wire/KEY/codex/openai/v1` и Responses API. Настройки провайдера применяются через `-c` к одному процессу Codex. Скрипт не копирует хостовые файлы авторизации, не меняет `~/.codex/config.toml` и не записывает ключ в репозиторий или свой вывод.
 
@@ -144,7 +146,7 @@ bash -n sbx-codex.sh
 bash scripts/test-sbx-codex.sh
 ~~~
 
-Тесты используют настоящий Git и jq, но подменяют Central и sbx; они не подтверждают полный запуск sandbox. Docker Sandboxes 0.46.0 установлен на Windows, реальный запуск скрипта дошёл до проверки Docker-авторизации и остановился с `Not authenticated to Docker`. Проверка контейнера требует `sbx login`. Реальный Central 1.11.0 проверен отдельно: получение ключа и обработчик `/codex/openai/v1/responses` доступны на порту 19516.
+Тесты используют настоящий Git и jq, но подменяют Central и sbx. Для проверки установленного окружения без запроса к модели запустите `./sbx-codex.sh atlas-smoke -- --version`. При ошибках службы выполните `sbx diagnose`: проверка Docker Engine не заменяет проверку Docker Sandboxes. Результат реального запуска и текущие ограничения записаны в [TESTING.md](TESTING.md).
 
 Источники настройки: [провайдеры Codex](https://developers.openai.com/codex/config-advanced/#custom-model-providers), [справочник конфигурации](https://developers.openai.com/codex/config-reference/), [JetBrains Central CLI](https://www.jetbrains.com/help/central-cli/quickstart.html).
 

@@ -102,12 +102,21 @@ for invalid in ../outside /absolute --flag 'two words' 'a;echo-bad' Uppercase; d
 done
 pass 'Reject path traversal, options and invalid names'
 
+printf -v too_long '%064d' 0
+for invalid in a with_underscore default "$too_long"; do
+  run_launcher "$invalid"
+  require test "$status" -ne 0
+  require test ! -e "$CENTRAL_TEST_CAPTURE"
+  require test ! -d "$fixture/$invalid"
+done
+pass 'Reject names unsupported by sbx before creating a worktree'
+
 run_launcher feature -- --model 'model-from-central' 'Prompt with spaces; $(not-a-command)'
 require test "$status" -eq 0
 require test -f "$fixture/feature/.git"
 require test "$(git -C "$fixture/feature" branch --show-current)" = feature
 require has_arg "$fixture/feature"
-require has_arg ':git'
+if has_arg ':git'; then echo 'Unsupported :git workspace argument.' >&2; exit 1; fi
 require has_arg '--'
 require has_arg 'OPENAI_API_KEY=fake_proxy-key.123'
 require has_arg 'OPENAI_BASE_URL=http://host.docker.internal:19516/wire/fake_proxy-key.123/codex/openai/v1'
@@ -120,6 +129,20 @@ if grep -Fq "$MOCK_KEY" "$fixture/output"; then echo 'Proxy key leaked to output
 require test ! -d "$fixture/feature/.codex"
 pass 'Create worktree; preserve paths/arguments; configure Responses without leaking the key'
 
+sbx_args=()
+while IFS= read -r -d '' arg; do sbx_args+=("$arg"); done < "$SBX_TEST_CAPTURE"
+require test "${#sbx_args[@]}" -eq 25
+require test "${sbx_args[0]}" = run
+require test "${sbx_args[1]}" = --name
+require test "${sbx_args[2]}" = feature
+require test "${sbx_args[7]}" = codex
+require test "${sbx_args[8]}" = "$fixture/feature"
+require test "${sbx_args[9]}" = --
+require test "${sbx_args[22]}" = --model
+require test "${sbx_args[23]}" = model-from-central
+require test "${sbx_args[24]}" = 'Prompt with spaces; $(not-a-command)'
+pass 'Use one workspace followed by the sbx argument separator, without a :git mount'
+
 printf 'uncommitted\n' > "$fixture/feature/keep.txt"
 run_launcher feature
 require test "$status" -eq 0
@@ -131,6 +154,15 @@ git -C "$fixture/project" branch existing
 run_launcher existing
 require test "$status" -eq 0
 pass 'Reuse an existing branch that has no worktree'
+
+new_fixture
+printf -v longest '%063d' 0
+for valid in ab "$longest"; do
+  run_launcher "$valid"
+  require test "$status" -eq 0
+  require test "$(git -C "$fixture/$valid" branch --show-current)" = "$valid"
+done
+pass 'Accept sandbox names at both length boundaries'
 
 new_fixture
 mkdir "$fixture/feature"
