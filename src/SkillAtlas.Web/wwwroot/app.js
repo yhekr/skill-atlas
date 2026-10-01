@@ -1,9 +1,15 @@
 'use strict';
 
-import { filterSkills } from './skill-filter.mjs?v=filter-1';
+import { filterSkills } from './skill-filter.mjs?v=stars-1';
+import { STAR_STORAGE_KEY, createStarStore } from './skill-stars.mjs?v=stars-1';
 
 const $ = id => document.getElementById(id);
-const state = { scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, similarController: null, scanVersion: 0, documentVersion: 0, similarVersion: 0, view: 'preview' };
+const state = { scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, similarController: null, scanVersion: 0, documentVersion: 0, similarVersion: 0, view: 'preview', starredOnly: false };
+
+// Some browsers throw on localStorage access when site data is blocked.
+let browserStorage = null;
+try { browserStorage = window.localStorage; } catch { }
+const stars = createStarStore(browserStorage);
 
 function showError(message) {
   $('scan-error').textContent = message;
@@ -39,10 +45,18 @@ function emptyReader(title, description) {
 function renderSkills() {
   const query = $('skill-filter').value.trim();
   const skills = state.scan?.skills || [];
-  const matching = filterSkills(skills, query);
+  const source = state.scan?.source;
+  const matching = filterSkills(skills, query).filter(({ skill }) => !state.starredOnly || stars.has(source, skill.path));
+  const starredCount = state.scan ? skills.filter(skill => stars.has(source, skill.path)).length : 0;
   $('clear-filter').hidden = !$('skill-filter').value;
+  $('starred-count').textContent = String(starredCount);
+  $('starred-toggle').disabled = skills.length === 0;
+  $('starred-toggle').setAttribute('aria-pressed', String(state.starredOnly));
   $('skill-list').replaceChildren();
   for (const { skill, index } of matching) {
+    const starred = stars.has(source, skill.path);
+    const row = document.createElement('div');
+    row.className = 'skill-row';
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'skill-item' + (state.selected === index ? ' active' : '');
@@ -58,14 +72,48 @@ function renderSkills() {
     description.textContent = skill.description;
     button.append(title, description);
     button.addEventListener('click', () => selectSkill(index));
-    $('skill-list').append(button);
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'skill-star' + (starred ? ' starred' : '');
+    star.dataset.starIndex = String(index);
+    star.textContent = starred ? '★' : '☆';
+    star.setAttribute('aria-pressed', String(starred));
+    star.setAttribute('aria-label', `Star ${skill.name}`);
+    star.addEventListener('click', () => toggleStar(index, star));
+    row.append(button, star);
+    $('skill-list').append(row);
   }
   $('list-empty').hidden = matching.length > 0;
   if (state.scan) {
-    $('sidebar-count').textContent = query ? `${matching.length} / ${skills.length}` : String(skills.length);
-    $('list-empty').querySelector('p').textContent = query ? 'No matching skills.' : 'No skills found.';
-    $('list-empty').querySelector('span:last-child').textContent = query ? 'Try fewer words or clear the filter.' : 'Try a different repository or branch.';
+    const narrowed = query || state.starredOnly;
+    $('sidebar-count').textContent = narrowed ? `${matching.length} / ${skills.length}` : String(skills.length);
+    const noStars = state.starredOnly && starredCount === 0;
+    $('list-empty').querySelector('p').textContent = noStars ? 'No starred skills.' : narrowed ? 'No matching skills.' : 'No skills found.';
+    $('list-empty').querySelector('span:last-child').textContent = noStars ? 'Star a skill with ☆ to keep it here.'
+      : query ? 'Try fewer words or clear the filter.' : 'Try a different repository or branch.';
   }
+  renderReaderStar();
+}
+
+function renderReaderStar() {
+  const skill = state.scan && state.selected !== null ? state.scan.skills[state.selected] : null;
+  const starred = !!skill && stars.has(state.scan.source, skill.path);
+  $('star-button').classList.toggle('starred', starred);
+  $('star-button').setAttribute('aria-pressed', String(starred));
+  $('star-icon').textContent = starred ? '★' : '☆';
+}
+
+function toggleStar(index, control) {
+  const scan = state.scan;
+  if (!scan) return;
+  const focused = document.activeElement === control;
+  stars.toggle(scan.source, scan.skills[index].path);
+  renderSkills();
+  $('star-note').textContent = stars.persistent ? '' : 'Stars could not be saved in this browser. They last until you close this tab.';
+  $('star-note').hidden = stars.persistent;
+  // The list is rebuilt on every change, so keep keyboard focus on the same control.
+  if (focused && control.classList.contains('skill-star'))
+    ($('skill-list').querySelector(`[data-star-index="${index}"]`) || $('starred-toggle')).focus();
 }
 
 function setView(view) {
@@ -240,6 +288,7 @@ async function scanRepository(event) {
     state.selected = null;
     state.document = null;
     state.documents.clear();
+    state.starredOnly = false;
     $('result-title').textContent = data.source;
     $('skill-count').textContent = `${data.skills.length} skill${data.skills.length === 1 ? '' : 's'}`;
     $('skill-count').hidden = false;
@@ -272,6 +321,16 @@ $('scan-form').addEventListener('submit', scanRepository);
 $('similar-button').addEventListener('click', findSimilar);
 $('cancel-button').addEventListener('click', () => state.scanController?.abort());
 $('skill-filter').addEventListener('input', renderSkills);
+$('starred-toggle').addEventListener('click', () => {
+  state.starredOnly = !state.starredOnly;
+  renderSkills();
+});
+$('star-button').addEventListener('click', () => { if (state.selected !== null) toggleStar(state.selected, $('star-button')); });
+window.addEventListener('storage', event => {
+  if (event.key !== STAR_STORAGE_KEY && event.key !== null) return;
+  stars.reload();
+  renderSkills();
+});
 function clearFilter() {
   $('skill-filter').value = '';
   renderSkills();
