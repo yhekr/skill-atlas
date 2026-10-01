@@ -2,10 +2,11 @@
 
 [![CI](https://github.com/yhekr/skill-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/yhekr/skill-atlas/actions/workflows/ci.yml)
 
-CLI и веб-приложение на **C# / .NET 10**, которые находят `SKILL.md` в репозиториях и позволяют искать скиллы сразу по нескольким источникам. CLI также поддерживает локальные папки. Результаты сохраняют название, описание, расположение и источник каждого скилла.
+CLI и веб-приложение на **C# / .NET 10**, которые находят `SKILL.md` в репозиториях и позволяют искать скиллы сразу по нескольким источникам. CLI также поддерживает локальные папки и сканирование всех репозиториев GitHub-организации. Результаты сохраняют название, описание, расположение и источник каждого скилла.
 
 ```text
 skill-atlas scan https://github.com/JetBrains/kotlin
+skill-atlas org JetBrains
 ```
 
 ## Быстрый запуск
@@ -48,7 +49,7 @@ dotnet run --project src/SkillAtlas.Web
 
 ```powershell
 dotnet pack src/SkillAtlas.Cli -c Release -o artifacts
-dotnet tool install --global SkillAtlas.Tool --source ./artifacts --version 1.0.1
+dotnet tool install --global SkillAtlas.Tool --source ./artifacts --version 1.1.0
 skill-atlas scan https://github.com/JetBrains/kotlin
 ```
 
@@ -74,6 +75,11 @@ skill-atlas scan JetBrains/kotlin --query "wrapper gradle"
 skill-atlas scan JetBrains/kotlin JetBrains/MPS --query tests --json
 skill-atlas scan ./project-one ./project-two --query "build tests"
 
+# Все репозитории организации или пользователя GitHub (ветки по умолчанию)
+skill-atlas org JetBrains
+skill-atlas org https://github.com/JetBrains --query gradle --json > jetbrains-skills.json
+skill-atlas org JetBrains --include-forks --include-archived --concurrency 8
+
 # Похожие скиллы по точному имени или пути SKILL.md
 skill-atlas scan JetBrains/kotlin --similar build-tools-bump-gradle-api
 skill-atlas scan JetBrains/kotlin --similar .claude/skills/build-tools-bump-gradle-api/SKILL.md --json
@@ -95,6 +101,19 @@ skill-atlas --help
 
 Веб-API для группы: `POST /api/scan-batches` с `{ "repositories": ["JetBrains/kotlin", "JetBrains/MPS"], "reference": null }`. Ответ содержит `scans` со снимками и `failures` с ошибками отдельных источников. Исходный `/api/scans` и маршруты чтения/Similar совместимы. Similar сравнивает только скиллы репозитория выбранной записи. Подробная [спецификация](docs/specs/multi-repository-search.md) описывает ограничения и критерии проверки.
 
+## Вся организация
+
+`skill-atlas org <организация>` сканирует каждый репозиторий организации GitHub по его ветке по умолчанию. Принимаются имя (`JetBrains`), `github.com/JetBrains` и `https://github.com/JetBrains`. Если организации с таким именем нет, используется аккаунт пользователя.
+
+- Список репозиториев загружается через GitHub REST API (`/orgs/{org}/repos`, по 100 на страницу, не больше 10 000). Каждый репозиторий затем сканируется так же, как `scan`: Git, те же правила обнаружения, ссылки на commit SHA. Отключённые (disabled) репозитории пропускаются.
+- Форки и архивные репозитории по умолчанию пропускаются: форки обычно содержат чужие скиллы. `--include-forks` и `--include-archived` включают их; архивному форку нужны оба флага. Пропущенные репозитории перечисляются в сводке и JSON.
+- `--concurrency 1–16` задаёт число параллельных сканирований (по умолчанию 4). Результаты всегда упорядочены по имени репозитория, независимо от порядка завершения.
+- `--query`, `--json` и `--no-color` работают как в `scan`; `--query` применяется к каждому репозиторию. `--ref` и `--similar` не поддерживаются: у репозиториев разные ветки, а Similar работает внутри одного репозитория.
+- Текстовый вывод показывает сводку и только репозитории со скиллами. JSON: `{ "owner": "JetBrains", "repositories": [{ "source", "reference": null, "result", "error" }], "skipped": [{ "source", "reason": "fork" | "archived" }] }`. В `repositories` входят все просканированные репозитории, в том числе без скиллов.
+- Ошибка отдельного репозитория попадает в `error` и stderr (`Error (owner/repo): …`), остальные результаты сохраняются; код выхода **1**. Ошибка получения списка, например несуществующая организация или лимит API, тоже даёт **1**. Неверные аргументы дают **2**, `Ctrl+C` — **130**.
+
+Без токена GitHub разрешает 60 запросов к API в час, этого хватает примерно на 6000 репозиториев за запуск. Переменная `GITHUB_TOKEN` (или `GH_TOKEN`) повышает лимит и показывает приватные репозитории, доступные токену. Токен отправляется только в `api.github.com` для получения списка и не передаётся Git; клонирование по-прежнему использует настроенные HTTPS Git credentials. Пример полного запуска для JetBrains приведён в [TESTING](TESTING.md#сканирование-организации).
+
 ## Как работает поиск
 
 1. Создаёт временный shallow partial clone (`--depth=1 --filter=blob:none --no-checkout`). Получает дерево файлов без рабочей копии и полной истории.
@@ -103,7 +122,7 @@ skill-atlas --help
 4. Объединяет зеркальные копии из `.agents/skills` и `.claude/skills` внутри одного проекта: относительный путь скилла и SHA-256 всего содержимого должны совпадать. BOM и различие CRLF/LF не учитываются. Ссылка ведёт к `.agents` как к первому пути по порядку сортировки. Одинаковое имя при разных инструкциях не объединяется.
 5. Привязывает GitHub-ссылки к точному commit SHA и удаляет временный репозиторий.
 
-GitHub REST API и API-токен не требуются. Все варианты GitHub-адреса нормализуются в HTTPS. Приватные репозитории используют уже настроенные **HTTPS Git credentials** (например, Git Credential Manager); SSH-ключ сам по себе не используется. Интерактивные запросы авторизации отключены.
+Для `scan` GitHub REST API и API-токен не требуются; `org` использует REST API только для списка репозиториев. Все варианты GitHub-адреса нормализуются в HTTPS. Приватные репозитории используют уже настроенные **HTTPS Git credentials** (например, Git Credential Manager); SSH-ключ сам по себе не используется. Интерактивные запросы авторизации отключены.
 
 Содержимое скиллов — данные: приложение не выполняет инструкции, скрипты, Git hooks, checkout-фильтры и команды из `SKILL.md`. Оно не устанавливает найденные скиллы.
 

@@ -155,6 +155,31 @@ public class CliIntegrationTests
         Assert.Contains("Error:", result.Error);
     }
 
+    [Theory]
+    [InlineData("org")]
+    [InlineData("org bad--name")]
+    [InlineData("org JetBrains --ref main")]
+    [InlineData("org JetBrains --concurrency 99")]
+    public async Task InvalidOrganizationUsageFailsBeforeAnyNetworkAccess(string command)
+    {
+        using var workspace = new TestWorkspace();
+        var result = await workspace.RunAsync("dotnet", new[] { CliAssembly }.Concat(command.Split(' ')).ToArray());
+        Assert.Equal(2, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Error:", result.Error);
+        Assert.DoesNotContain(" at ", result.Error);
+    }
+
+    [Fact]
+    public async Task OrganizationHelpIsPrintedWithoutScanning()
+    {
+        using var workspace = new TestWorkspace();
+        var result = await workspace.RunAsync("dotnet", CliAssembly, "org", "--help");
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("--include-archived", result.Output);
+        Assert.Empty(result.Error);
+    }
+
     [Fact]
     public async Task MissingPathAndLocalRefReturnOneWithoutStackTrace()
     {

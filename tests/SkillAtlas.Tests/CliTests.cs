@@ -40,4 +40,56 @@ public class CliTests
         Assert.True(options.Json);
         Assert.Null(options.Query);
     }
+
+    [Fact]
+    public void ParsesOrganizationOptions()
+    {
+        var options = CliOptions.Parse(["org", "https://github.com/JetBrains", "--include-forks", "--include-archived",
+            "--concurrency", "8", "-q", "gradle", "--json", "--no-color"]);
+        Assert.Equal("JetBrains", options.Organization);
+        Assert.Null(options.Source);
+        Assert.True(options.IncludeForks);
+        Assert.True(options.IncludeArchived);
+        Assert.Equal(8, options.Concurrency);
+        Assert.Equal("gradle", options.Query);
+        Assert.True(options.Json);
+        Assert.True(options.NoColor);
+    }
+
+    [Fact]
+    public void OrganizationDefaultsSkipForksAndArchivedWithFourParallelScans()
+    {
+        var options = CliOptions.Parse(["org", "JetBrains"]);
+        Assert.Equal("JetBrains", options.Organization);
+        Assert.False(options.IncludeForks);
+        Assert.False(options.IncludeArchived);
+        Assert.Equal(4, options.Concurrency);
+        Assert.True(CliOptions.Parse(["org", "--help"]).Help);
+        Assert.Equal("JetBrains", CliOptions.Parse(["org", "--", "JetBrains"]).Organization);
+    }
+
+    [Theory]
+    [InlineData("org")]
+    [InlineData("org JetBrains Kotlin")]
+    [InlineData("org JetBrains/kotlin")]
+    [InlineData("org bad--name")]
+    [InlineData("org JetBrains --ref main")]
+    [InlineData("org JetBrains --similar build")]
+    [InlineData("org JetBrains --concurrency")]
+    [InlineData("org JetBrains --concurrency 0")]
+    [InlineData("org JetBrains --concurrency 17")]
+    [InlineData("org JetBrains --concurrency -1")]
+    [InlineData("org JetBrains --concurrency +4")]
+    [InlineData("org JetBrains --concurrency four")]
+    [InlineData("org JetBrains --unknown")]
+    public void RejectsInvalidOrganizationArguments(string command) =>
+        Assert.Throws<ArgumentException>(() => CliOptions.Parse(command.Split(' ')));
+
+    [Fact]
+    public void HelpDocumentsOrganizationScans()
+    {
+        Assert.Contains("skill-atlas org <organization", CliOptions.HelpText);
+        Assert.Contains("--include-forks", CliOptions.HelpText);
+        Assert.Contains("GITHUB_TOKEN", CliOptions.HelpText);
+    }
 }

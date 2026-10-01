@@ -17,6 +17,11 @@ try
     var pretty = !options.Json && !options.NoColor && !Console.IsOutputRedirected &&
         Environment.GetEnvironmentVariable("NO_COLOR") is null;
 
+    if (options.Organization is not null)
+        return await OrganizationCommand.RunAsync(options,
+            new OrganizationScanner(new GitHubRepositoryLister(token: OrganizationCommand.TokenFromEnvironment()), new GitHubScanner()),
+            pretty, Console.Out, Console.Error, null, cancellation.Token);
+
     async Task<ScanResult> ScanSource(string source, string? reference, CancellationToken token)
     {
         if (Directory.Exists(source))

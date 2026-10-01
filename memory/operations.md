@@ -31,3 +31,11 @@
 - Короткий существующий TEMP/TMP помог обойти ограничение пути сокетов sandboxd. Настраивать до старта службы; не удалять сокеты работающего процесса и не сбрасывать Sandboxes при обычном повторении запуска.
 - Для проверки вывода `sbx run` нужен TTY: неинтерактивное подключение может вернуть 0 без вывода Codex. Стандартное предупреждение sbx об отсутствии OpenAI credentials не мешает отдельному провайдеру Central; не добавлять другой ключ только ради этого предупреждения.
 - Успешный Docker-контейнер, сеть, авторизация Central и реальная сессия Codex — отдельные проверки. Реальные Codex/Central и Git внутри sbx подтверждены 2026-09-30, подробности в [status.md](status.md) и [TESTING](../TESTING.md).
+
+## Linux-среда Air без NuGet (2026-10-01)
+
+- Прокси пропускает только список хостов: github.com/api.github.com, packages.microsoft.com, archive.ubuntu.com работают; nuget.org (и его CDN/зеркала), dot.net/builds.dotnet, PyPI и Azure blob с artifacts GitHub Actions — нет. `cache-redirector.jetbrains.com` для NuGet лишь перенаправляет на nuget.org.
+- .NET SDK 10 ставится без root распаковкой `.deb` из `packages.microsoft.com/debian/12/prod` (sdk, runtime, aspnetcore, host/hostfxr, targeting/apphost packs) в домашний каталог; нужен `libicu74` из Ubuntu-архива через `LD_LIBRARY_PATH`. Для apphost установленного tool требуется `DOTNET_ROOT`. Инвариантную глобализацию не включать: от ICU зависит нормализация Unicode в Similar.
+- NuGet-пакеты CLI можно пересобрать из исходников тегов GitHub во временный локальный источник (`--configfile` с единственным локальным источником, отдельный `NUGET_PACKAGES`, чтобы не засорять общий кэш). У Spectre.Console 0.57 сгенерированные файлы закоммичены; устаревшие `Colors.ColorGenerator` в основном проекте исключать — цвета теперь в `Spectre.Console.Ansi`. Тестовый стек (xunit, Test.Sdk, Mvc.Testing) так получить не удалось: локально использовался временный runner с исходниками `xunit.assert`, окончательная проверка — GitHub Actions.
+- PowerShell отсутствует, поэтому post-commit хук и `Run-CI.ps1` не работают: после коммита выполнялись обычный push ветки и опрос run через `gh`. Обёртка `gh` здесь требует запуска из каталога GitHub-репозитория.
+
