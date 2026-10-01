@@ -3,6 +3,7 @@ using SkillAtlas.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IScanCatalog, ScanCatalog>();
+builder.Services.AddSingleton(Random.Shared);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 4096);
 var app = builder.Build();
 
@@ -132,8 +133,28 @@ app.MapGet("/api/scans/{id:guid}/skills/{index:int}/similar", (Guid id, int inde
     return Results.Ok(new { matches = SkillSimilarity.FindSimilar(skills, index) });
 });
 
+app.MapPost("/api/surprise", (SurpriseRequest request, IScanCatalog catalog, Random random) =>
+{
+    var scanIds = request.ScanIds;
+    if (scanIds is null || scanIds.Count is 0 or > ScanBatch.MaximumSources || scanIds.Distinct().Count() != scanIds.Count)
+        return Results.BadRequest(new { error = $"Choose between 1 and {ScanBatch.MaximumSources} different scans." });
+    var scans = scanIds.Select(catalog.Find).ToArray();
+    if (scans.Any(item => item is null))
+        return Results.Json(new { error = "This scan has expired. Scan the repository again to spin the roulette." }, statusCode: 410);
+
+    // The open skill is skipped so that each spin lands somewhere new.
+    var excludedPool = request.Exclude is null ? -1 : scanIds.ToList().IndexOf(request.Exclude.ScanId);
+    var exclude = excludedPool >= 0 ? (excludedPool, request.Exclude!.Index) : ((int, int)?)null;
+    var spin = SkillRoulette.Spin(scans.Select(item => item!.Snapshot.Catalog.Skills.Count).ToArray(), random, exclude);
+    if (spin is null) return Results.NotFound(new { error = "There are no skills to pick from yet." });
+    var picked = scans[spin.Pool]!;
+    return Results.Ok(new { scanId = picked.Id, spin.Index, skill = picked.Snapshot.Catalog.Skills[spin.Index], spin.Fortune });
+});
+
 app.Run();
 
 public sealed record ScanRequest(string? Repository, string? Reference);
 public sealed record BatchScanRequest(IReadOnlyList<string?>? Repositories, string? Reference);
+public sealed record SurpriseRequest(IReadOnlyList<Guid>? ScanIds, SurpriseExclusion? Exclude);
+public sealed record SurpriseExclusion(Guid ScanId, int Index);
 public partial class Program;

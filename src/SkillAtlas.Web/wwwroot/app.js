@@ -4,7 +4,7 @@ import { flattenScans, searchCollection, findSkillIndex, parseRepositories } fro
 import { STAR_STORAGE_KEY, createStarStore } from './skill-stars.mjs?v=multi-stars-1';
 
 const $ = id => document.getElementById(id);
-const state = { scans: [], scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, similarController: null, scanVersion: 0, documentVersion: 0, similarVersion: 0, view: 'preview', starredOnly: false };
+const state = { scans: [], scan: null, selected: null, document: null, documents: new Map(), scanController: null, documentController: null, similarController: null, surpriseController: null, scanVersion: 0, documentVersion: 0, similarVersion: 0, surpriseVersion: 0, view: 'preview', starredOnly: false };
 
 // Some browsers throw on localStorage access when site data is blocked.
 let browserStorage = null;
@@ -53,6 +53,7 @@ function renderSkills() {
   $('clear-filter').hidden = !$('skill-filter').value;
   $('starred-count').textContent = String(starredCount);
   $('starred-toggle').disabled = skills.length === 0;
+  $('surprise-button').disabled = skills.length === 0 || !!state.surpriseController;
   $('starred-toggle').setAttribute('aria-pressed', String(state.starredOnly));
   $('skill-list').replaceChildren();
   for (const { skill, index } of matching) {
@@ -132,7 +133,7 @@ function setView(view) {
   }
 }
 
-async function selectSkill(index) {
+async function selectSkill(index, fortune = '') {
   state.documentController?.abort();
   resetSimilar();
   const version = ++state.documentVersion;
@@ -150,6 +151,8 @@ async function selectSkill(index) {
   $('skill-name').textContent = skill.name;
   $('skill-description').textContent = skill.description;
   $('skill-path').textContent = skill.path;
+  $('skill-fortune').textContent = fortune;
+  $('skill-fortune').hidden = !fortune;
   $('skill-repository').textContent = `${skill.repository} · ${skill.revision?.slice(0, 7) || 'no commit'}`;
   $('similar-scope').textContent = `Within ${skill.repository}. Keyword overlap in names and descriptions, no AI.`;
   $('source-link').href = skill.url;
@@ -256,6 +259,48 @@ async function findSimilar() {
   }
 }
 
+function resetSurprise() {
+  state.surpriseController?.abort();
+  state.surpriseController = null;
+  state.surpriseVersion++;
+  $('surprise-button').classList.remove('rolling');
+  $('surprise-note').hidden = true;
+}
+
+// The server rolls the dice across the repositories chosen in Search in, skipping the open skill.
+async function surprise() {
+  if (!state.scan || state.surpriseController) return;
+  const scope = $('repository-scope').value;
+  const scanIds = scope ? [scope] : state.scans.map(scan => scan.scanId);
+  const current = state.selected === null ? null : state.scan.skills[state.selected];
+  const version = ++state.surpriseVersion;
+  const controller = new AbortController();
+  state.surpriseController = controller;
+  $('surprise-button').disabled = true;
+  $('surprise-button').classList.add('rolling');
+  $('surprise-note').hidden = true;
+  try {
+    const data = await fetch('/api/surprise', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+      body: JSON.stringify({ scanIds, exclude: current && scanIds.includes(current.scanId) ? { scanId: current.scanId, index: current.skillIndex } : null })
+    }).then(responseJson);
+    if (version !== state.surpriseVersion) return;
+    const index = findSkillIndex(state.scan.skills, data.scanId, data.index);
+    if (index < 0) throw new Error('The roulette picked a repository that is no longer loaded. Try again.');
+    selectSkill(index, data.fortune);
+  } catch (error) {
+    if (error.name === 'AbortError' || version !== state.surpriseVersion) return;
+    $('surprise-note').textContent = error instanceof TypeError ? 'Could not reach the scanner to spin the roulette. Try again.' : error.message;
+    $('surprise-note').hidden = false;
+  } finally {
+    if (version === state.surpriseVersion) {
+      state.surpriseController = null;
+      $('surprise-button').classList.remove('rolling');
+      $('surprise-button').disabled = !state.scan?.skills.length;
+    }
+  }
+}
+
 function renderWarnings(warnings) {
   $('warnings').replaceChildren();
   $('warnings').hidden = warnings.length === 0;
@@ -273,6 +318,7 @@ function applyScans(scans, preserveSelection = false) {
   const selectedKey = preserveSelection ? state.scan?.skills[state.selected]?.key : null;
   state.documentController?.abort();
   resetSimilar();
+  resetSurprise();
   state.documentVersion++;
   state.scans = scans;
   state.scan = scans.length ? { skills: flattenScans(scans) } : null;
@@ -385,6 +431,7 @@ async function scanRepository(event) {
 
 $('scan-form').addEventListener('submit', scanRepository);
 $('similar-button').addEventListener('click', findSimilar);
+$('surprise-button').addEventListener('click', surprise);
 $('cancel-button').addEventListener('click', () => state.scanController?.abort());
 $('skill-filter').addEventListener('input', renderSkills);
 $('starred-toggle').addEventListener('click', () => {

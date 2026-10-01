@@ -84,6 +84,7 @@ public sealed partial class WebApiTests
         Assert.Contains("id=\"repository\"", html);
         Assert.Contains("id=\"starred-toggle\"", html);
         Assert.Contains("id=\"star-button\"", html);
+        Assert.Contains("id=\"surprise-button\"", html);
         Assert.Contains("frame-ancestors 'none'", response.Headers.GetValues("Content-Security-Policy").Single());
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
     }
@@ -182,11 +183,15 @@ public sealed partial class WebApiTests
     private sealed class TestApplication : WebApplicationFactory<Program>
     {
         public FakeCatalog Catalog { get; } = new();
+        public Random? RandomSource { get; set; }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(services =>
         {
             services.RemoveAll<IScanCatalog>();
             services.AddSingleton<IScanCatalog>(Catalog);
+            if (RandomSource is null) return;
+            services.RemoveAll<Random>();
+            services.AddSingleton(RandomSource);
         });
     }
 
@@ -222,5 +227,6 @@ public sealed partial class WebApiTests
         }
 
         public StoredScan? Find(Guid id) => id == Scan.Id ? Scan : _scans.GetValueOrDefault(id);
+        public void Add(StoredScan scan) => _scans[scan.Id] = scan;
     }
 }
