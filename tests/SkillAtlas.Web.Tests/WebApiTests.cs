@@ -60,12 +60,14 @@ public sealed class WebApiTests
         Assert.All(json.GetProperty("matches").EnumerateArray(), match => Assert.NotEqual(0, match.GetProperty("index").GetInt32()));
     }
 
-    [Fact]
-    public async Task BrowserFilterModuleIsServedWithJavaScriptContentType()
+    [Theory]
+    [InlineData("/skill-filter.mjs?v=stars-1")]
+    [InlineData("/skill-stars.mjs?v=stars-1")]
+    public async Task BrowserModulesAreServedWithJavaScriptContentType(string path)
     {
         await using var app = new TestApplication();
         using var client = app.CreateClient();
-        var response = await client.GetAsync("/skill-filter.mjs?v=filter-1");
+        var response = await client.GetAsync(path);
         response.EnsureSuccessStatusCode();
         Assert.Contains(response.Content.Headers.ContentType?.MediaType,
             new[] { "text/javascript", "application/javascript" });
@@ -78,7 +80,10 @@ public sealed class WebApiTests
         using var client = app.CreateClient();
         var response = await client.GetAsync("/");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("id=\"repository\"", await response.Content.ReadAsStringAsync());
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("id=\"repository\"", html);
+        Assert.Contains("id=\"starred-toggle\"", html);
+        Assert.Contains("id=\"star-button\"", html);
         Assert.Contains("frame-ancestors 'none'", response.Headers.GetValues("Content-Security-Policy").Single());
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
     }

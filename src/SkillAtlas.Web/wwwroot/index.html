@@ -8,8 +8,8 @@
   <link rel="icon" href="/favicon.svg?v=mono-1" type="image/svg+xml">
   <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/JetBrainsMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/app.css?v=filter-1">
-  <script type="module" src="/app.js?v=filter-1"></script>
+  <link rel="stylesheet" href="/app.css?v=stars-1">
+  <script type="module" src="/app.js?v=stars-1"></script>
 </head>
 <body>
   <header class="topbar">
@@ -51,7 +51,8 @@
         <aside class="sidebar" aria-label="Found skills">
           <div class="sidebar-heading"><span>EXPLORER / SKILLS</span><span id="sidebar-count" role="status" aria-live="polite" aria-atomic="true">—</span></div>
           <div class="filter-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="skill-filter" type="search" placeholder="e.g. gradle tests" aria-label="Filter skills" aria-describedby="filter-help" aria-controls="skill-list" disabled autocomplete="off" spellcheck="false"><button id="clear-filter" type="button" aria-label="Clear filter" hidden>×</button></div>
-          <p id="filter-help" class="filter-help">All words · name + description</p>
+          <div class="filter-options"><p id="filter-help" class="filter-help">All words · name + description</p><button id="starred-toggle" type="button" class="starred-toggle" aria-pressed="false" aria-controls="skill-list" disabled><span aria-hidden="true">★</span> Starred <span id="starred-count">0</span></button></div>
+          <p id="star-note" class="star-note" role="status" hidden></p>
           <div id="skill-list" class="skill-list"></div>
           <div id="list-empty" class="list-empty"><span class="empty-list-icon" aria-hidden="true">[ ]</span><p>No repository loaded.</p><span>Run a scan to get started.</span></div>
           <div class="sidebar-footer"><span aria-hidden="true">✓</span> mirrored skills deduplicated</div>
@@ -60,7 +61,7 @@
         <section id="reader" class="reader" aria-label="Skill reader" aria-busy="false">
           <div id="reader-empty" class="reader-empty"><div class="document-glyph" aria-hidden="true"><span>{</span><i></i><span>}</span></div><span class="empty-eyebrow">GET TO KNOW YOUR TOOLS</span><h2 id="empty-title">It starts with a repository.</h2><p id="empty-description">Run a scan, then select a skill<br>to read its instructions here.</p><div class="empty-tags"><span>SKILL.md</span><span>Human-readable. Agent-ready.</span></div></div>
           <div id="reader-detail" hidden>
-            <div class="reader-toolbar"><div class="view-tabs" role="tablist" aria-label="Document view"><button id="preview-tab" role="tab" aria-selected="true" aria-controls="preview" class="view-tab active" type="button">Preview</button><button id="source-tab" role="tab" aria-selected="false" aria-controls="source" class="view-tab" type="button">Source</button></div><div class="reader-actions"><button id="copy-button" type="button" class="subtle-button" aria-label="Copy skill source">Copy</button><a id="source-link" class="source-link" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></div></div>
+            <div class="reader-toolbar"><div class="view-tabs" role="tablist" aria-label="Document view"><button id="preview-tab" role="tab" aria-selected="true" aria-controls="preview" class="view-tab active" type="button">Preview</button><button id="source-tab" role="tab" aria-selected="false" aria-controls="source" class="view-tab" type="button">Source</button></div><div class="reader-actions"><button id="star-button" type="button" class="star-button" aria-pressed="false"><span id="star-icon" aria-hidden="true">☆</span> Star</button><button id="copy-button" type="button" class="subtle-button" aria-label="Copy skill source">Copy</button><a id="source-link" class="source-link" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></div></div>
             <div class="document-heading"><span class="file-label"><span aria-hidden="true">#</span> SKILL.md</span><h2 id="skill-name"></h2><p id="skill-description"></p><div id="skill-path" class="file-path"></div></div>
             <section id="similar-section" class="similar-section" aria-labelledby="similar-heading" aria-busy="false">
               <div class="similar-heading"><h3 id="similar-heading">Similar skills</h3><button id="similar-button" type="button">Find similar</button></div>

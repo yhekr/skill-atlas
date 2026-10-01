@@ -121,12 +121,23 @@ input::placeholder { color: #9999a4; opacity: 1; }
 .filter-wrap input::-webkit-search-cancel-button { -webkit-appearance: none; }
 .filter-wrap button { position: absolute; right: 3px; top: 3px; width: 30px; height: 30px; border: 0; border-radius: 3px; background: transparent; color: #6334b2; font-size: 18px; }
 .filter-wrap button:hover { background: var(--accent-soft); }
-.filter-help { margin: 0 14px 14px; color: #777080; font-size: 9px; }
+.filter-options { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 14px 14px; }
+.filter-help { margin: 0; color: #777080; font-size: 9px; }
+.starred-toggle { flex-shrink: 0; border: 1px solid #cdcdd7; border-radius: 20px; padding: 2px 10px; background: #fff; color: #62626f; font-size: 10px; white-space: nowrap; }
+.starred-toggle:hover:not(:disabled) { border-color: #b299dc; color: var(--accent); }
+.starred-toggle[aria-pressed="true"] { border-color: #b299dc; background: var(--accent-soft); color: #5329a1; }
+.starred-toggle > span:first-child { color: #c76b12; }
+.star-note { margin: -6px 14px 12px; color: #9a4b00; font-size: 9px; }
 .filter-wrap input::placeholder { color: #75757f; }
 .filter-wrap input:disabled { background: #f0f0f3; }
 .skill-list { flex: 1; min-height: 0; padding-bottom: 10px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #bcb6c9 transparent; }
 .skill-list:empty { display: none; }
-.skill-item { position: relative; display: block; width: 100%; text-align: left; background: transparent; color: var(--ink); border: 0; border-left: 3px solid transparent; border-bottom: 1px solid #ececf1; padding: 15px 16px 15px 41px; }
+.skill-row { position: relative; }
+.skill-item { position: relative; display: block; width: 100%; text-align: left; background: transparent; color: var(--ink); border: 0; border-left: 3px solid transparent; border-bottom: 1px solid #ececf1; padding: 15px 46px 15px 41px; }
+.skill-star { position: absolute; top: 9px; right: 7px; width: 32px; height: 32px; border: 0; border-radius: 3px; background: transparent; color: #81818c; font-size: 16px; line-height: 1; }
+.skill-star:hover { background: var(--accent-soft); color: var(--accent); }
+.skill-star.starred, .star-button.starred > span { color: #c76b12; }
+.skill-star:focus-visible { outline-offset: -2px; }
 .skill-item::before { content: attr(data-index); position: absolute; top: 18px; left: 13px; color: #81818c; font-size: 9px; }
 .skill-item:hover { background: #f0edf7; }
 .skill-item.active { background: #eee7fb; border-left-color: var(--accent); }
@@ -157,7 +168,10 @@ input::placeholder { color: #9999a4; opacity: 1; }
 .view-tab:hover { color: var(--accent); background: #f8f5ff; }
 .view-tab.active { border-bottom-color: var(--accent); color: #5929b7; }
 .reader-actions { display: flex; align-items: center; gap: 17px; }
-.reader-actions .subtle-button { color: #62626f; font-size: 10px; }
+.reader-actions .subtle-button, .star-button { color: #62626f; font-size: 10px; }
+.star-button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #dedee3; border-radius: 20px; padding: 3px 11px; background: #fff; white-space: nowrap; }
+.star-button:hover { border-color: #b299dc; color: var(--accent); }
+.star-button.starred { border-color: #e7c9a8; background: #fff6ec; color: #7a3d00; }
 .source-link { color: #62626f; font-size: 10px; white-space: nowrap; }
 .document-heading { padding: 29px 32px 25px; border-bottom: 1px solid #e9e9ef; }
 .file-label { display: flex; align-items: center; gap: 8px; color: #787584; font-size: 10px; }
@@ -287,6 +301,7 @@ input::placeholder { color: #9999a4; opacity: 1; }
   .sidebar { max-height: 305px; }
   .skill-item { padding-top: 13px; padding-bottom: 13px; }
   .skill-item::before { top: 16px; }
+  .skill-star { top: 7px; }
   .skill-item strong { font-size: 11px; }
   .reader-empty { padding: 35px 18px; }
   .reader-empty h2 { font-size: 17px; }
@@ -295,7 +310,7 @@ input::placeholder { color: #9999a4; opacity: 1; }
   .reader-toolbar { padding: 0 8px; gap: 5px; flex-wrap: wrap; }
   .view-tab { padding: 12px 10px; font-size: 11px; }
   .reader-actions { gap: 8px; padding: 5px; }
-  .source-link, .reader-actions .subtle-button { font-size: 9px; }
+  .source-link, .reader-actions .subtle-button, .star-button { font-size: 9px; }
   .document-heading { padding: 24px 20px; }
   .similar-section { padding: 20px; }
   .similar-item { grid-template-columns: 1fr; }
