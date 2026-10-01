@@ -31,8 +31,12 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          sudo find artifacts/e2e -name '*.png' | sort
-          sudo find artifacts/e2e -name '*-actual.png' | sort | while read -r f; do echo "PNGDUMP $f $(sudo base64 -w0 "$f")"; done
+          sudo chmod -R a+rX artifacts/e2e
+          for f in $(find artifacts/e2e/run/results -name '*-actual.png' | sort); do
+            n="$(basename "$(dirname "$f")" | grep -o 'chromium-[a-z]*$')__$(basename "$f")"
+            base64 -w 3000 "$f" | sed "s|^|PNGDUMP $n |"
+          done
+          node -e 'const fs=require("fs");const seen=new Set();(function w(o){if(Array.isArray(o))return o.forEach(w);if(!o||typeof o!=="object")return;if(o.contentType==="image/png"&&o.name&&!o.name.endsWith(".png")&&o.body&&!seen.has(o.name)){seen.add(o.name);const b=Buffer.isBuffer(o.body)?o.body.toString("base64"):o.body;for(let i=0;i<b.length;i+=3000)console.log("PNGDUMP attach__"+o.name+".png "+b.slice(i,i+3000));}for(const k in o)w(o[k]);})(JSON.parse(fs.readFileSync("artifacts/e2e/run/report.json","utf8")))'
       - name: Upload videos, screenshots, diffs, traces and HTML reports
         if: always()
         uses: actions/upload-artifact@v4
