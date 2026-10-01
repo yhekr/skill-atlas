@@ -30,7 +30,9 @@ jobs:
       - name: TEMP dump actual screenshots for baseline review
         if: failure()
         shell: bash
-        run: find artifacts/e2e/run -name '*-actual.png' | sort | while read -r f; do echo "PNGDUMP $f $(base64 -w0 "$f")"; done
+        run: |
+          sudo find artifacts/e2e -name '*.png' | sort
+          sudo find artifacts/e2e -name '*-actual.png' | sort | while read -r f; do echo "PNGDUMP $f $(sudo base64 -w0 "$f")"; done
       - name: Upload videos, screenshots, diffs, traces and HTML reports
         if: always()
         uses: actions/upload-artifact@v4
