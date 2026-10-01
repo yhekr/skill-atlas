@@ -9,7 +9,7 @@ using SkillAtlas.Core;
 
 namespace SkillAtlas.Web.Tests;
 
-public sealed class WebApiTests
+public sealed partial class WebApiTests
 {
     [Fact]
     public async Task SimilarSkillsComeFromTheSameSnapshotAndCanBeOpenedByReturnedIndex()
@@ -199,11 +199,19 @@ public sealed class WebApiTests
         public int Calls { get; private set; }
         public string? Reference { get; private set; }
         public string? Failure { get; set; }
+        public Func<GitHubRepository, StoredScan>? Factory { get; set; }
+        private readonly Dictionary<Guid, StoredScan> _scans = [];
 
         public Task<StoredScan> ScanAsync(GitHubRepository repository, string? reference, CancellationToken cancellationToken)
         {
             Calls++;
             Reference = reference;
+            if (Factory is not null)
+            {
+                var scan = Factory(repository);
+                _scans[scan.Id] = scan;
+                return Task.FromResult(scan);
+            }
             return Failure switch
             {
                 "busy" => throw new ScanBusyException(),
@@ -213,6 +221,6 @@ public sealed class WebApiTests
             };
         }
 
-        public StoredScan? Find(Guid id) => id == Scan.Id ? Scan : null;
+        public StoredScan? Find(Guid id) => id == Scan.Id ? Scan : _scans.GetValueOrDefault(id);
     }
 }

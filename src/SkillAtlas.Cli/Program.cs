@@ -17,17 +17,39 @@ try
     var pretty = !options.Json && !options.NoColor && !Console.IsOutputRedirected &&
         Environment.GetEnvironmentVariable("NO_COLOR") is null;
 
-    async Task<ScanResult> Scan()
+    async Task<ScanResult> ScanSource(string source, string? reference, CancellationToken token)
     {
-        if (Directory.Exists(options.Source))
+        if (Directory.Exists(source))
         {
-            if (options.Reference is not null) throw new ScanException("--ref is supported only for GitHub repositories.");
-            return await new LocalScanner().ScanAsync(options.Source!, cancellation.Token);
+            if (reference is not null) throw new ScanException("--ref is supported only for GitHub repositories.");
+            return await new LocalScanner().ScanAsync(source, token);
         }
-        if (Path.IsPathRooted(options.Source!) || options.Source!.StartsWith('.') || options.Source.Contains('\\'))
-            throw new ScanException($"Local directory does not exist: {options.Source}");
-        return await new GitHubScanner().ScanAsync(GitHubRepository.Parse(options.Source), options.Reference, cancellation.Token);
+        if (Path.IsPathRooted(source) || source.StartsWith('.') || source.Contains('\\'))
+            throw new ScanException($"Local directory does not exist: {source}");
+        return await new GitHubScanner().ScanAsync(GitHubRepository.Parse(source), reference, token);
     }
+
+    var jsonOptions = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    if (options.Sources.Count > 1)
+    {
+        var targets = ScanBatch.Normalize(options.Sources, options.Reference, allowLocal: true);
+        var batch = await ScanBatch.RunAsync(targets, async (target, token) =>
+            (await ScanSource(target.Source, target.Reference, token)).Filter(options.Query), cancellation.Token);
+        if (options.Json) Console.WriteLine(JsonSerializer.Serialize(new { repositories = batch }, jsonOptions));
+        foreach (var item in batch)
+        {
+            if (item.Result is not null)
+            {
+                if (!options.Json) ResultRenderer.Render(item.Result, pretty, options.Query);
+                foreach (var warning in item.Result.Warnings)
+                    Console.Error.WriteLine($"Warning ({ResultRenderer.SafeText(item.Source)}): {ResultRenderer.SafeText(warning)}");
+            }
+            else Console.Error.WriteLine($"Error ({ResultRenderer.SafeText(item.Source)}): {ResultRenderer.SafeText(item.Error!)}");
+        }
+        return batch.Any(item => item.Error is not null) ? 1 : 0;
+    }
+
+    Task<ScanResult> Scan() => ScanSource(options.Source!, options.Reference, cancellation.Token);
 
     var result = pretty
         ? await AnsiConsole.Status().Spinner(Spinner.Known.Dots).StartAsync("Discovering skills…", _ => Scan())

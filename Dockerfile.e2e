@@ -1,0 +1,24 @@
+# The same browser/OS image generates baselines and compares them in GitHub CI.
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29 AS build
+WORKDIR /source
+COPY global.json Directory.Build.props ./
+COPY src/SkillAtlas.Core/ src/SkillAtlas.Core/
+COPY src/SkillAtlas.Web/ src/SkillAtlas.Web/
+RUN dotnet publish src/SkillAtlas.Web -c Release -o /published
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:2d584d8147faddb0d678c5748d47953e5b8e18621ed4fb7049a91381d9d7746f AS runtime
+FROM mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+COPY --from=runtime /usr/share/dotnet /usr/share/dotnet
+ENV PATH="/usr/share/dotnet:${PATH}" \
+    DOTNET_ROOT=/usr/share/dotnet \
+    DOTNET_NOLOGO=1 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    SKILL_ATLAS_WEB_DLL=/app/SkillAtlas.Web.dll
+WORKDIR /work
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY --from=build /published /app
+COPY playwright.config.mjs ./
+COPY tests/e2e/ tests/e2e/
+COPY scripts/prove-visual-diff.mjs scripts/
+CMD ["npm", "run", "test:e2e"]

@@ -3,6 +3,7 @@ namespace SkillAtlas.Cli;
 public sealed record CliOptions(string? Source, string? Reference, string? Query, bool Json, bool NoColor, bool Help, bool Version)
 {
     public string? SimilarTo { get; init; }
+    public IReadOnlyList<string> Sources { get; init; } = [];
 
     public static CliOptions Parse(string[] args)
     {
@@ -13,6 +14,7 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
         if (args[0] != "scan") throw new ArgumentException($"Unknown command '{args[0]}'.");
 
         string? source = null, reference = null, query = null, similarTo = null;
+        var sources = new List<string>();
         var json = false;
         var noColor = false;
         var positional = false;
@@ -33,13 +35,17 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
                     default: throw new ArgumentException($"Unknown option '{argument}'.");
                 }
             }
-            else if (source is null && !string.IsNullOrWhiteSpace(argument)) source = argument;
-            else throw new ArgumentException("Specify exactly one repository or directory.");
+            else if (!string.IsNullOrWhiteSpace(argument)) { sources.Add(argument); source ??= argument; }
+            else throw new ArgumentException("Repository entries cannot be blank.");
         }
         if (source is null) throw new ArgumentException("The scan command requires a repository or directory.");
         if (query is not null && similarTo is not null)
             throw new ArgumentException("Use --query or --similar, not both in the same scan.");
-        return new(source, reference, query, json, noColor, false, false) { SimilarTo = similarTo };
+        if (sources.Count > SkillAtlas.Core.ScanBatch.MaximumSources)
+            throw new ArgumentException("Specify at most 5 repositories or directories.");
+        if (sources.Count > 1 && similarTo is not null)
+            throw new ArgumentException("For --similar, select one repository or directory.");
+        return new(source, reference, query, json, noColor, false, false) { SimilarTo = similarTo, Sources = sources };
     }
 
     private static string Value(string[] args, ref int index)
@@ -51,10 +57,11 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
     }
 
     public const string HelpText = """
-        skill-atlas — one repository, every skill
+        skill-atlas — your repositories, every skill
 
         Usage:
           skill-atlas scan <github-url | owner/repo | local-directory> [options]
+          skill-atlas scan <source1> <source2> ... [options]  (up to 5 sources)
 
         Options:
           --ref <branch-or-tag>  Scan a specific branch or tag (default: default branch)
@@ -70,6 +77,11 @@ public sealed record CliOptions(string? Source, string? Reference, string? Query
           skill-atlas scan owner/repo --ref main --query gradle
           skill-atlas scan . --json
           skill-atlas scan owner/repo --similar build-gradle
+          skill-atlas scan JetBrains/kotlin JetBrains/MPS --query gradle --json
+
+        Multiple sources: --ref applies to all; failures preserve other results and return exit 1.
+        JSON uses a repositories array with source, reference, result and error for each source.
+        --similar requires a single source. Equivalent repository aliases are scanned once.
 
         Requires Git 2.25+ for remote scans; private repositories use your Git credentials.
         Skills are read as data. No instructions, hooks, or scripts from them are executed.

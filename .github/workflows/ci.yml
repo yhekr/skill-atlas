@@ -14,6 +14,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  browser:
+    name: Browser recordings and visual regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay deterministic browser demos
+        shell: pwsh
+        run: ./scripts/Run-BrowserTests.ps1
+      - name: Prove visual regression detection and restore
+        if: success()
+        shell: pwsh
+        run: ./scripts/Run-BrowserTests.ps1 -Mode prove
+      - name: Upload videos, screenshots, diffs, traces and HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-recordings-and-screenshots
+          path: artifacts/e2e/
+          if-no-files-found: error
+          retention-days: 14
+
   test:
     name: Build and test (${{ matrix.os }})
     timeout-minutes: 15
@@ -41,8 +63,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test browser filtering and stars
-        run: node --test tests/web/skill-filter.test.mjs tests/web/skill-stars.test.mjs
+      - name: Test browser filtering, repository collections and stars
+        run: node --test tests/web/skill-filter.test.mjs tests/web/repository-collection.test.mjs tests/web/skill-stars.test.mjs
       - name: Test sandbox launcher
         if: runner.os == 'Linux'
         shell: bash
