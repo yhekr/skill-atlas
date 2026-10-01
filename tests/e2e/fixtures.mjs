@@ -13,6 +13,9 @@ export const test = base.extend({
       documentStatus: 200,
       similarStatus: 200,
       matches: structuredClone(similarMatches),
+      surprise: { scanId: demoBatch.scans[0].scanId, index: 3, fortune: 'The dice have spoken.' },
+      surpriseStatus: 200,
+      surpriseBodies: [],
       held: false,
       release: () => {}
     };
@@ -36,6 +39,12 @@ export const test = base.extend({
           const batch = structuredClone(api.batch);
           if (api.held) await new Promise(resolve => { api.release = resolve; });
           await respond(batch);
+          return;
+        }
+        if (url.pathname === '/api/surprise') {
+          assert.equal(request.method(), 'POST');
+          api.surpriseBodies.push(request.postDataJSON());
+          await respond(api.surpriseStatus === 200 ? api.surprise : { error: 'This scan has expired. Scan the repository again to spin the roulette.' }, api.surpriseStatus);
           return;
         }
         const match = /^\/api\/scans\/([\da-f-]+)\/skills\/(\d+)(\/similar)?$/.exec(url.pathname);
@@ -91,7 +100,7 @@ export async function checkpoint(page, testInfo, name, selector) {
   const target = selector ? page.locator(selector) : page;
   // Put the pointer away from UI controls; hover states are otherwise OS/timing-sensitive.
   await page.mouse.move(0, 0);
-  await expect(target).toHaveScreenshot(`${name}.png`);
+  await expect.soft(target).toHaveScreenshot(`${name}.png`);
   const image = await target.screenshot({ animations: 'disabled', caret: 'hide', scale: 'css' });
   await testInfo.attach(name, { body: image, contentType: 'image/png' });
 }
